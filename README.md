@@ -12,9 +12,11 @@ Current state: M0 to M4 are built and their checks pass with GATER (`solar-pro4-
 ## Run
 
 ```sh
-cp .env.example .env        # fill LLM_* and INGEST_TOKEN (openssl rand -hex 32); blank values use backend/app/config.py defaults
+cp .env.example .env        # fill LLM_*, INGEST_TOKEN, OPERATOR_TOKENS (openssl rand -hex 32); blank values use backend/app/config.py defaults
+# Schema before the backend: on a fresh database the backend exits at startup while
+# `incidents` is missing. `run` starts postgres and exits when the migration is done.
+docker compose run --rm backend uv run --no-sync python scripts/migrate.py
 docker compose up -d --build
-docker compose exec backend uv run --no-sync python scripts/migrate.py
 curl localhost:8000/health  # {"db":"ok","llm_configured":true} once LLM_* is set
 ```
 
