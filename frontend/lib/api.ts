@@ -107,6 +107,19 @@ export interface Action {
 
 export type PamelaBlock = "not_decided" | "no_threat" | "needs_human";
 
+export interface PatchRun {
+  id: string;
+  template_id: string;
+  template_version: string;
+  target_id: string;
+  allowed: boolean;
+  reason: string;
+  result: "dry_run" | "applied" | "rolled_back" | "denied" | "failed" | "rollback_failed";
+  audit_ref: string;
+  detail: Record<string, unknown>;
+  recorded_at: string;
+}
+
 export interface IncidentDetail {
   incident: Incident;
   alerts: unknown[];
@@ -114,6 +127,7 @@ export interface IncidentDetail {
   agent_runs: AgentRun[];
   recommendations: Recommendation[];
   actions: Action[];
+  patch_runs: PatchRun[];
   pamela: { blocked_reason: PamelaBlock | null; max_severity: Severity; block_seconds: number };
   lab_last_pull_at: string | null;
 }

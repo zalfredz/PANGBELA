@@ -82,8 +82,22 @@ python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.js
 python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.json --enable --force-failure
 ```
 
+Patch runs (including denials) are stored by the backend through an
+operator-authenticated endpoint and shown read-only on the incident page. The canonical
+lab service is never patched; only a disposable clone is.
 Policy, eligibility and limits: `docs/security/PAMELA_PATCH_POLICY.md`.
 Evidence and matrix: `docs/testing/PHASE4_PATCH_REPORT.md`.
+
+## Final validation
+
+```sh
+cd backend && uv run pytest -q && uv run ruff check . ../shipper
+cd frontend && npm run lint && npm run build
+python3 lab/verify_lab.py          # 10 real-lab checks
+```
+
+Architecture: `docs/architecture.md`. Demo: `docs/submission/DEMO_SCRIPT.md`.
+Latest results: `docs/testing/PHASE5_RELEASE_REPORT.md`.
 
 ## LLM checks (need LLM_BASE_URL, LLM_API_KEY, LLM_MODEL in .env)
 

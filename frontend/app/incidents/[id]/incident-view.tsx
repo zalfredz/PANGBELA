@@ -139,6 +139,8 @@ export default function IncidentView() {
         <Recommendations detail={d} onChanged={reload} />
       </section>
 
+      <PatchRuns detail={d} />
+
       <section aria-labelledby="how-title">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <SectionTitle id="how-title">Bagaimana PANGBELA memutuskan</SectionTitle>
@@ -149,6 +151,46 @@ export default function IncidentView() {
 
       <Rerun detail={d} onDone={reload} />
     </div>
+  );
+}
+
+const PATCH_RESULT_TEXT: Record<string, string> = {
+  dry_run: "Dry run",
+  applied: "Diterapkan pada clone",
+  rolled_back: "Di-rollback",
+  denied: "Ditolak",
+  failed: "Gagal",
+  rollback_failed: "Rollback gagal",
+};
+
+function PatchRuns({ detail: d }: { detail: IncidentDetail }) {
+  const runs = d.patch_runs;
+  if (runs.length === 0) return null;
+  return (
+    <section aria-labelledby="patch-title">
+      <SectionTitle id="patch-title">Status patch (clone lab)</SectionTitle>
+      <ul className="divide-y divide-line rounded border border-line bg-surface">
+        {runs.map((r) => (
+          <li key={r.id} className="space-y-1 px-4 py-3">
+            <p className="font-medium">
+              {r.allowed ? "ELIGIBLE" : `DITOLAK · ${r.reason}`}
+              <span className="ml-2 text-sm font-normal text-muted">
+                {r.template_id} v{r.template_version} → {r.target_id}
+              </span>
+            </p>
+            <p className="text-sm">
+              {PATCH_RESULT_TEXT[r.result] ?? r.result}
+              <span className="text-muted"> · {shortTime(r.recorded_at)}</span>
+            </p>
+            <p className="break-all text-xs text-muted">Audit: {r.audit_ref}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-sm text-muted">
+        Patch hanya menyentuh clone disposable dari image lab, bukan service kanonik.
+        Keputusan dan hasilnya deterministik; tidak ada jalur dari LLM ke eksekusi patch.
+      </p>
+    </section>
   );
 }
 
