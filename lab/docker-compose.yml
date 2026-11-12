@@ -17,6 +17,8 @@ services:
     environment:
       # 1 = the app stops writing process.log (T9: host telemetry missing).
       PROCESS_LOG_DISABLED: "${PROCESS_LOG_DISABLED:-0}"
+      # Verifies X-Lab-Approval on requests that claim to be approved operations.
+      LAB_APPROVAL_SECRET: "${LAB_APPROVAL_SECRET:?set LAB_APPROVAL_SECRET, e.g. --env-file .env}"
     volumes:
       - lab-logs:/lab-logs
     networks: [lab]
@@ -64,7 +66,8 @@ services:
     mem_limit: 128m
     environment:
       # Read from the shell or --env-file .env; never baked into the image.
-      INGEST_TOKEN: "${INGEST_TOKEN:?set INGEST_TOKEN, e.g. --env-file .env}"
+      # Auth events use their own credential, not the Suricata shipper's.
+      AUTH_INGEST_TOKEN: "${AUTH_INGEST_TOKEN:?set AUTH_INGEST_TOKEN, e.g. --env-file .env}"
       AUTH_INGEST_URL: "http://backend:8000/ingest/auth"
     volumes:
       - lab-logs:/lab-logs
@@ -74,6 +77,21 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+
+  # The approved maintenance job: it really triggers the RCE signature, and the app
+  # really executes the marker, but with a signed approval (T4).
+  maintenance:
+    build: .
+    command: python maintenance.py
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [lab]
+    environment:
+      LAB_APPROVAL_SECRET: "${LAB_APPROVAL_SECRET:?set LAB_APPROVAL_SECRET, e.g. --env-file .env}"
+    depends_on:
+      app:
+        condition: service_healthy
+    profiles: ["tools"]
 
   runner:
     build: .

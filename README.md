@@ -12,7 +12,7 @@ Current state: M0 to M4 are built and their checks pass with GATER (`solar-pro4-
 ## Run
 
 ```sh
-cp .env.example .env        # fill LLM_*, INGEST_TOKEN, OPERATOR_TOKENS (openssl rand -hex 32); blank values use backend/app/config.py defaults
+cp .env.example .env        # fill LLM_*, INGEST_TOKEN, AUTH_INGEST_TOKEN, OPERATOR_TOKENS (openssl rand -hex 32); blank values use backend/app/config.py defaults
 # Schema before the backend: on a fresh database the backend exits at startup while
 # `incidents` is missing. `run` starts postgres and exits when the migration is done.
 docker compose run --rm backend uv run --no-sync python scripts/migrate.py
@@ -68,8 +68,10 @@ docker compose -f lab/docker-compose.yml --env-file .env up -d --build
 python3 lab/verify_lab.py     # real traffic, deterministic checks, no LLM
 ```
 
-Setup, reset and safety notes: `lab/README.md`. Results and remaining gaps:
-`docs/testing/PHASE2_REAL_LAB_REPORT.md`.
+The lab also needs `LAB_APPROVAL_SECRET` (signed maintenance operations, T4) and
+`AUTH_INGEST_TOKEN` (login events). Setup, reset and safety notes: `lab/README.md`.
+Results: `docs/testing/PHASE2_REAL_LAB_REPORT.md`,
+`docs/testing/PHASE3_VALIDATION_REPORT.md`.
 
 ## LLM checks (need LLM_BASE_URL, LLM_API_KEY, LLM_MODEL in .env)
 

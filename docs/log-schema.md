@@ -22,6 +22,7 @@ This is what the backend parses today. The field names come from the team's answ
 | request_id | for RCE Confirmed | string/int | must equal the request_id on the process event |
 | user_agent | no | string | |
 | service | no | string | for example `web-lab` or `safe-endpoint` |
+| policy | for T4 Benign | string | `approved` only when the app has verified a signed maintenance approval; anything else is untrusted and cannot make an alert benign |
 
 ```json
 {"timestamp": "2026-11-11T02:00:00.000Z", "request_id": "r-0002", "src_ip": "198.51.100.23", "method": "GET", "path": "/ping?host=127.0.0.1;id", "status": 200, "user_agent": "curl/8.7.1", "service": "web-lab"}
@@ -38,7 +39,7 @@ This is what the backend parses today. The field names come from the team's answ
 | event_type | no | string | for example `login` |
 | service | no | string | |
 | request_id | no | string/int | |
-| authorized | for BF Confirmed | boolean | **proposed by the backend, needs agreement.** On a `success` line, `false` means the lab defines this login as unauthorized (ground truth). `true` means a legitimate login. Omitted means unknown. |
+| authorized | for BF Confirmed | boolean | Computed by the **authentication producer** from its own policy (in the lab: the source CIDR against the account), never from a request field. `false` = the producer defines this login as unauthorized. `true` = legitimate. Omitted = unknown. The backend stores the producer name with the event. |
 
 ```json
 {"timestamp": "2026-11-11T03:01:00Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "success", "service": "auth-service", "authorized": false}
@@ -60,6 +61,7 @@ What the rules do with it:
 | ppid | no | integer | |
 | parent_exe | for RCE Confirmed | string | must match `WEB_SERVER_EXES` (name or full path) |
 | request_id | for RCE Confirmed | string/int | written by lab instrumentation; Falco does not produce it on its own |
+| authorized | for RCE Confirmed | boolean | the executing host's own policy verdict. Only `false` can confirm RCE; `true` means an approved child, missing means the authorization question is unsettled |
 | cmdline | no | string | |
 | uid | no | string/int | |
 | host | no | string | |
@@ -73,9 +75,23 @@ RCE is Confirmed only when all of these hold:
 
 - the process's parent is the web server;
 - it started between `CORRELATION_WINDOW_BEFORE_SECONDS` before and `CORRELATION_WINDOW_SECONDS` after the alerted request;
-- its `request_id` equals that request's `request_id`.
+- its `request_id` equals that request's `request_id`;
+- the process says `authorized: false`.
 
-Without the `request_id` match, the result is at most Attempted with `partially_verified`. If several requests fall in the window, the match is ambiguous (Q14).
+Without the `request_id` match, the result is at most Attempted with `partially_verified`. If several requests fall in the window, the match is ambiguous (Q14). A linked process with `authorized: true` is at most Attempted; with no `authorized` field it is Attempted and `partially_verified`.
+
+**T4 false positive.** An alert is Benign only when the linked process is `authorized: true` **and** the matching access-log request has `policy: "approved"`. The app writes that value only after verifying a signed, unexpired, single-use approval (`LAB_APPROVAL_SECRET`). A header or body field alone never does it, and a replayed approval is refused before execution.
+
+## Ingestion credentials
+
+Producers are authenticated per trust domain:
+
+| Endpoint | Header | Setting |
+|---|---|---|
+| `POST /ingest/suricata` | `X-Ingest-Token` | `INGEST_TOKEN` |
+| `POST /ingest/auth` | `X-Auth-Ingest-Token` | `AUTH_INGEST_TOKEN` |
+
+The tokens are not interchangeable: a network-alert producer must not be able to write login events and their `authorized` flag. Both endpoints fail closed (503) when their token is unset, reject a wrong token (401), validate every line, and skip malformed lines without storing them. Each auth row records `producer` (`AUTH_INGEST_PRODUCER`).
 
 ## Suricata EVE
 

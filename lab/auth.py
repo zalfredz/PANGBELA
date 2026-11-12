@@ -17,7 +17,7 @@ from ipaddress import ip_address, ip_network
 
 LOG_DIR = os.environ.get("LAB_LOG_DIR", "/lab-logs")
 INGEST_URL = os.environ.get("AUTH_INGEST_URL", "http://backend:8000/ingest/auth")
-INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")
+INGEST_TOKEN = os.environ.get("AUTH_INGEST_TOKEN", "")
 SERVICE = "lab-auth"
 
 # Passwords are synthetic lab values. Allowed CIDRs are the authority: an analyst may
@@ -48,7 +48,7 @@ def emit(event: dict) -> None:
             INGEST_URL,
             data=json.dumps({"lines": [line]}).encode(),
             method="POST",
-            headers={"Content-Type": "application/json", "X-Ingest-Token": INGEST_TOKEN},
+            headers={"Content-Type": "application/json", "X-Auth-Ingest-Token": INGEST_TOKEN},
         )
         try:
             with urllib.request.urlopen(req, timeout=5):

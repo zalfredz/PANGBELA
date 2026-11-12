@@ -3,6 +3,11 @@
 Date: 2026-11-13. Branch `hardening/kartika-mvp-sync`. Deterministic layer only: no LLM
 was called (GATER credits unavailable), so no live-agent result is claimed here.
 
+**Superseded in Phase 3:** T4 is now a true false-positive test (real alert + signed
+maintenance approval, PASS); `/ingest/auth` has its own producer credential; T8 has a
+real-lab deterministic run. See `docs/testing/PHASE3_VALIDATION_REPORT.md`. The T4 row and
+the "auth events bypass the shipper" note below are historical for Phase 2.
+
 ## A. Executive summary
 
 An isolated Docker lab now produces **real** network, access, process and authentication

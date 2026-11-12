@@ -26,7 +26,7 @@ EXPECTED = {
     "T5": ("brute_force", "confirmed", "high", "verified"),
     "T6": ("brute_force", "attempted", "medium", "verified"),
     "T7": None,
-    "T4": None,
+    "T8": ("rce", "attempted", "medium", "verified"),
 }
 
 
@@ -73,7 +73,7 @@ def wait_assessed(timeout: float = 30.0) -> list[dict]:
 
 def check(name: str) -> tuple[bool, str]:
     want = EXPECTED[name]
-    run(COMPOSE + ["run", "--rm", "runner", "python", "runner.py", name])
+    run(COMPOSE + ["run", "--rm", "--build", "runner", "python", "runner.py", name])
     items = wait_assessed()
     if want is None:
         return (not items), f"incidents={len(items)}"
@@ -85,6 +85,31 @@ def check(name: str) -> tuple[bool, str]:
     return got == want, f"got={got}"
 
 
+def t4() -> list[tuple[str, bool, str]]:
+    """Approved maintenance job: real IDS alert, signed approval, real execution."""
+    out = []
+    for name, args, want in (
+        ("T4-approved", [], ("rce", "benign", "none", "verified")),
+        ("T4-forged", ["--forged"], ("rce", "attempted", "medium", "verified")),
+    ):
+        reset()
+        run(COMPOSE + ["run", "--rm", "--build", "maintenance", "python", "maintenance.py", *args])
+        items = wait_assessed()
+        if not items:
+            out.append((name, False, "no incident"))
+            continue
+        i = items[0]
+        got = (i["attack_type"], i["provisional_status"], i["provisional_severity"],
+               i["provisional_verification"])
+        out.append((name, got == want, f"got={got}"))
+    # Replay: the same nonce must be refused the second time.
+    reset()
+    r = run(COMPOSE + ["run", "--rm", "--build", "maintenance", "python", "maintenance.py", "--replay"])
+    last = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
+    out.append(("T4-replay", last == "replay 200 400", last))
+    return out
+
+
 def t9() -> tuple[bool, str]:
     """Host telemetry missing: the same RCE traffic must not be confirmed."""
     run(
@@ -94,7 +119,7 @@ def t9() -> tuple[bool, str]:
     time.sleep(8)
     reset()
     run(COMPOSE + ["exec", "-T", "app", "sh", "-c", "rm -f /lab-logs/process.log"])
-    run(COMPOSE + ["run", "--rm", "runner", "python", "runner.py", "T9"])
+    run(COMPOSE + ["run", "--rm", "--build", "runner", "python", "runner.py", "T9"])
     items = wait_assessed()
     if not items:
         return False, "no incident"
@@ -107,13 +132,18 @@ def t9() -> tuple[bool, str]:
 
 
 if __name__ == "__main__":
-    names = sys.argv[1:] or list(EXPECTED)
+    requested = sys.argv[1:]
+    names = [n for n in (requested or EXPECTED) if n in EXPECTED]
     failures = 0
     for name in names:
         reset()
         ok, detail = check(name)
         print(f"{'PASS' if ok else 'FAIL'} {name} {detail}")
         failures += not ok
+    if not sys.argv[1:] or "T4" in sys.argv[1:]:
+        for name, ok, detail in t4():
+            print(f"{'PASS' if ok else 'FAIL'} {name} {detail}")
+            failures += not ok
     if not sys.argv[1:] or "T9" in sys.argv[1:]:
         reset()
         ok, detail = t9()

@@ -38,6 +38,13 @@ execution (status stays `attempted` because an alert fired). A linked child with
 authorization field is `attempted` + `partially_verified`: the execution is real, the
 policy answer is missing.
 
+**Approved operation (T4).** An alert is `benign` only when all three hold: the request
+is in the access log, the linked child is `authorized=true`, and the app verified a
+signed, unexpired, single-use maintenance approval and wrote `policy: "approved"`. A
+client-supplied header/body field cannot do this alone; a replayed approval is refused
+before execution. Contradictory evidence (approved request, disallowed child) resolves as
+`confirmed`, not benign.
+
 **Assurance ceiling.** The authorization fact currently comes from the lab app's own
 instrumentation (the documented Falco fallback). A compromised app could forge it.
 Before claiming tamper resistance, move process telemetry to a host-level sensor (Falco/
@@ -118,6 +125,11 @@ Every `POST /recommendations/{id}/decision`, `POST /recommendations/{id}/pamela`
 - `PAMELA` cannot be used as an operator name.
 - `GET /enforcement` uses `X-Enforcement-Token`, a different secret from both the LLM key
   and the operator tokens.
+- Producers are authenticated per trust domain: `X-Ingest-Token` for network alerts,
+  `X-Auth-Ingest-Token` for login events. The tokens are not interchangeable. Each login
+  row records its producer; `authorized` is only meaningful from that producer's policy,
+  never from the browser or a request body.
+- Neither token is the LLM key or an operator token.
 
 Lab-only shortcut: the dashboard keeps the token in `sessionStorage`. That is not a
 login system; before any non-lab deployment it needs a server-side session and per-role

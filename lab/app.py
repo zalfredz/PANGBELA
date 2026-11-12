@@ -1,12 +1,15 @@
 """Deliberately vulnerable lab web app. Every process event is read from /proc of a
 child this process really started; only the harmless marker may be executed."""
 
+import hashlib
+import hmac
 import json
 import os
 import re
 import socket
 import subprocess
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,7 +23,35 @@ SAFE_HOST = re.compile(r"^[A-Za-z0-9.\-]{1,64}$")
 # The only command that may run after the separator. Anything else is refused before
 # exec, so the lab never executes attacker-chosen commands.
 INJECTION = re.compile(r"^127\.0\.0\.1;\s*printf " + MARKER + r"\s*$")
+APPROVAL_SECRET = os.environ.get("LAB_APPROVAL_SECRET", "")
+_APPROVAL_WINDOW_SECONDS = 120
+_seen_nonces: dict[str, float] = {}
 _lock = threading.Lock()
+
+
+def approval_ok(path: str, header: str | None) -> bool:
+    """A signed, unexpired, never-seen approval for exactly this path. A copied header
+    is rejected because each nonce is accepted once."""
+    if not APPROVAL_SECRET or not header:
+        return False
+    try:
+        ts, nonce, mac = header.split(":", 2)
+        if abs(time.time() - int(ts)) > _APPROVAL_WINDOW_SECONDS:
+            return False
+    except ValueError:
+        return False
+    expected = hmac.new(
+        APPROVAL_SECRET.encode(), f"{ts}:{nonce}:{path}".encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(mac, expected):
+        return False
+    with _lock:
+        if nonce in _seen_nonces:
+            return False
+        _seen_nonces[nonce] = time.time()
+        for old in [n for n, at in _seen_nonces.items() if at < time.time() - 600]:
+            _seen_nonces.pop(old, None)
+    return True
 
 
 def now() -> str:
@@ -80,12 +111,19 @@ class Handler(BaseHTTPRequestHandler):
         request_id = uuid.uuid4().hex
         url = urlparse(self.path)
         host = parse_qs(url.query).get("host", [""])[0]
+        approval_header = self.headers.get("X-Lab-Approval")
+        approved = approval_ok(self.path, approval_header)
         status, body = 404, "not found"
 
         if url.path == "/healthz":
             status, body = 200, "ok"
+        elif approval_header and not approved:
+            # A forged or replayed approval is refused before anything runs.
+            status, body = 400, "refused: invalid or replayed approval"
         elif url.path in ("/vuln/ping", "/safe/ping"):
-            status, body = self.handle_ping(host, request_id, vuln=url.path == "/vuln/ping")
+            status, body = self.handle_ping(
+                host, request_id, vuln=url.path == "/vuln/ping", approved=approved
+            )
 
         write(
             "access.log",
@@ -98,6 +136,8 @@ class Handler(BaseHTTPRequestHandler):
                 "status": status,
                 "user_agent": self.headers.get("User-Agent", ""),
                 "service": SERVICE,
+                # approved = signature verified by this app, never a client-supplied label.
+                "policy": "approved" if approved else "untrusted",
             },
         )
         payload = body.encode()
@@ -107,14 +147,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def handle_ping(self, host: str, request_id: str, vuln: bool) -> tuple[int, str]:
+    def handle_ping(
+        self, host: str, request_id: str, vuln: bool, approved: bool
+    ) -> tuple[int, str]:
         if SAFE_HOST.match(host):
             # Sanitized input: no shell, and the policy allows this child.
             code, _ = run_child(["/bin/sleep", "0.2"], request_id, authorized=True)
             return (200 if code == 0 else 500), f"ok {host}"
         if vuln and INJECTION.match(host):
+            # Only a signed maintenance request makes this execution allowed.
             code, out = run_child(
-                ["/bin/sh", "-c", f"sleep 0.2; printf {MARKER}"], request_id, authorized=False
+                ["/bin/sh", "-c", f"sleep 0.2; printf {MARKER}"],
+                request_id,
+                authorized=approved,
             )
             return (200 if code == 0 else 500), out
         return 400, "refused: payload not in the lab allowlist"
