@@ -20,12 +20,12 @@
     "managed": true
   },
   "fixture": true,
-  "source_container": "baae811617f8eb159a0612b5b5c1acd08712eb3fc58489a0008c45168fc762cf",
+  "source_container": "f2492767bf12efe29e5bc84f9c654c75e7689951331db3ec34d69833caab6fc2",
   "image": {
     "name": "pangbela-lab-app",
     "id": "sha256:34c530a286e551bc6a6375abbbb1b1dd23dee6671b4987c133c4e2aa7ef29754"
   },
-  "clone": "pangbela-patch-5428888f",
+  "clone": "pangbela-patch-6659eb38",
   "before_sha256": "22b7a0740a524335fa32eea8b719a31e025a0fcffe79ce2488d0fbe64918083a",
   "after_sha256": "a4143b8cf71dcccd840fd6aacca41a79ef7bdedd3c7966e3cbd43c544b52f5f1",
   "checks": [
@@ -45,11 +45,6 @@
       "pass": true
     }
   ],
-  "forced_failure": true,
-  "rollback_check": {
-    "vulnerable_again": true,
-    "value": "200 LAB_RCE_OK"
-  },
-  "result": "rolled_back",
-  "recorded_at": "2026-11-12T19:28:26.548329+00:00"
+  "result": "applied",
+  "recorded_at": "2026-11-12T19:43:56.429320+00:00"
 }

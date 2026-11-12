@@ -101,6 +101,7 @@ def test_detail_after_run(client, engine):
         "actions",
         "pamela",
         "lab_last_pull_at",
+        "patch_runs",
     }
     assert body["incident"]["status"] == "attempted"
     assert body["incident"]["confidence"] == 0.67  # 2 of 3 sources, decision agreed

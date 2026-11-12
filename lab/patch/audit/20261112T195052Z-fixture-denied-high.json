@@ -1,8 +1,8 @@
 {
-  "incident": "5be52519-b203-4bda-acd0-7e55495a3b55",
+  "incident": "fixture-denied-high",
   "decision": {
     "allowed": false,
-    "reason": "not_decided"
+    "reason": "needs_human"
   },
   "template": {
     "id": "v1_sanitize_ping",
@@ -19,8 +19,7 @@
     "criticality": "lab",
     "managed": true
   },
-  "enabled": true,
-  "fixture": false,
+  "fixture": true,
   "result": "denied",
-  "recorded_at": "2026-11-12T19:26:17.866494+00:00"
+  "recorded_at": "2026-11-12T19:50:52.111030+00:00"
 }

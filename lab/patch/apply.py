@@ -103,6 +103,59 @@ def fetch_incident(incident_id: str) -> dict:
         return json.load(r)["incident"]
 
 
+def operator_token() -> str | None:
+    """First operator token from .env, so the run record can be posted. The executor is
+    operator-run; it never asks the backend to decide anything."""
+    env = ROOT / ".env"
+    for line in env.read_text().splitlines():
+        if line.startswith("OPERATOR_TOKENS="):
+            for pair in line.split("=", 1)[1].split(","):
+                name, _, token = pair.strip().partition(":")
+                if name and token:
+                    return token
+    return None
+
+
+def post_run(incident_id: str, record: dict, manifest: dict, target: dict | None,
+             allowed: bool, reason: str, result: str, path: Path) -> None:
+    token = operator_token()
+    if not token:
+        print("warning: no OPERATOR_TOKENS entry, patch run not posted", file=sys.stderr)
+        return
+    body = {
+        "template_id": manifest["id"],
+        "template_version": manifest["version"],
+        "target_id": (target or {}).get("id", "unknown"),
+        "allowed": allowed,
+        "reason": reason,
+        "result": result,
+        "audit_ref": str(path.relative_to(ROOT)),
+        "detail": {"checks": record.get("checks", []),
+                   "before_sha256": record.get("before_sha256"),
+                   "after_sha256": record.get("after_sha256"),
+                   "clone": record.get("clone"),
+                   "forced_failure": record.get("forced_failure", False)},
+    }
+    req = urllib.request.Request(
+        f"http://localhost:8000/incidents/{incident_id}/patch-runs",
+        data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", "X-Operator-Token": token},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as e:  # the lab run already succeeded; the audit file is authoritative
+        print(f"warning: could not post patch run: {e}", file=sys.stderr)
+
+
+def finish(record: dict, manifest: dict, target: dict | None, allowed: bool, reason: str,
+           result: str, incident_id: str | None) -> Path:
+    path = audit({**record, "result": result})
+    if incident_id:
+        post_run(incident_id, record, manifest, target, allowed, reason, result, path)
+    return path
+
+
 def audit(record: dict) -> Path:
     AUDIT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -184,7 +237,8 @@ def main() -> int:
         "fixture": incident.get("fixture", False),
     }
     if not decision.allowed:
-        path = audit({**record, "result": "denied"})
+        path = finish(record, manifest, raw_target, False, decision.reason, "denied",
+                      args.incident)
         print(json.dumps({**decision.__dict__, "audit": str(path)}))
         return 2
 
@@ -195,7 +249,8 @@ def main() -> int:
     record["source_container"] = source
     record["image"] = {"name": image_name, "id": image_id}
     if image_name.split(":")[0] != manifest["applies_to"]:
-        path = audit({**record, "result": "denied", "reason": "running_image_mismatch"})
+        path = finish(record, manifest, raw_target, False, "running_image_mismatch", "denied",
+                      args.incident)
         print(json.dumps({"allowed": False, "reason": "running_image_mismatch", "audit": str(path)}))
         return 2
 
@@ -203,7 +258,8 @@ def main() -> int:
     if args.dry_run:
         diff = list(difflib.unified_diff(current.splitlines(), template_text.splitlines(),
                                         "current", "template", lineterm=""))
-        path = audit({**record, "result": "dry_run", "diff_lines": len(diff)})
+        record["diff_lines"] = len(diff)
+        path = finish(record, manifest, raw_target, True, "eligible", "dry_run", args.incident)
         print("\n".join(diff[:40]))
         print(json.dumps({"result": "dry_run", "audit": str(path)}))
         return 0
@@ -217,7 +273,8 @@ def main() -> int:
     try:
         docker("start", clone)
         if not wait_healthy(clone):
-            path = audit({**record, "result": "failed", "reason": "clone_unhealthy"})
+            path = finish(record, manifest, raw_target, True, "eligible", "failed",
+                          args.incident)
             print(json.dumps({"result": "failed", "audit": str(path)}))
             return 1
         ok, results = patch_clone(clone, template_text, record)
@@ -235,10 +292,11 @@ def main() -> int:
                 "value": probe(clone, EXPLOIT),
             }
             result = "rolled_back" if restored else "rollback_failed"
-            path = audit({**record, "result": result})
+            path = finish(record, manifest, raw_target, True, "eligible", result,
+                          args.incident)
             print(json.dumps({"result": result, "audit": str(path)}))
             return 1 if restored else 3
-        path = audit({**record, "result": "applied"})
+        path = finish(record, manifest, raw_target, True, "eligible", "applied", args.incident)
         print(json.dumps({"result": "applied", "audit": str(path)}))
         return 0
     finally:

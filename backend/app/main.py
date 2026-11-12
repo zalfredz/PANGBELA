@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import db
-from app.api import incidents, ingest, recommendations, tests_api
+from app.api import incidents, ingest, patches, recommendations, tests_api
 from app.config import settings
 from app.runner import Runner, recover_stale_runs
 
@@ -30,6 +30,7 @@ app.include_router(ingest.router)
 app.include_router(incidents.router)
 app.include_router(recommendations.router)
 app.include_router(tests_api.router)
+app.include_router(patches.router)
 
 app.add_middleware(
     CORSMiddleware,

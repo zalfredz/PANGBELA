@@ -163,6 +163,11 @@ def get_incident(incident_id: UUID) -> dict:
                 " created_at, expires_at, fetched_at, reverted_at, reverted_by"
                 " FROM actions WHERE incident_id = :id ORDER BY created_at"
             ),
+            "patch_runs": rows(
+                "SELECT id, template_id, template_version, target_id, allowed, reason, result,"
+                " audit_ref, detail, recorded_at FROM patch_runs WHERE incident_id = :id"
+                " ORDER BY recorded_at DESC LIMIT 20"
+            ),
         }
         # What approving would actually do: the target the code takes from the incident
         # (shown instead of the agent's text), or why it would stay a manual task.
