@@ -1,0 +1,23 @@
+# Hand-written fixture, not a lab capture. JSON Lines in the auth log schema of
+# docs/log-schema.md (fields from the team baseline, 11 Nov 2026). RFC 5737
+# documentation IPs. 198.51.100.40 fails 12 logins in 55 s and then gets in, marked
+# authorized=false; 192.0.2.60 mistypes a password twice and then logs in, marked
+# authorized=true. The last line has a result outside success/failure and must be
+# skipped.
+{"timestamp": "2026-11-11T03:00:00Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:05Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:10Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:15Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:20Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:25Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:30Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:35Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:40Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:45Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:50Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:00:55Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:01:00Z", "event_type": "login", "username": "admin", "src_ip": "198.51.100.40", "result": "success", "service": "auth-service", "authorized": false}
+{"timestamp": "2026-11-11T03:02:00Z", "event_type": "login", "username": "dewi", "src_ip": "192.0.2.60", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:02:10Z", "event_type": "login", "username": "dewi", "src_ip": "192.0.2.60", "result": "failure", "service": "auth-service"}
+{"timestamp": "2026-11-11T03:02:20Z", "event_type": "login", "username": "dewi", "src_ip": "192.0.2.60", "result": "success", "service": "auth-service", "authorized": true}
+{"timestamp": "2026-11-11T03:02:30Z", "event_type": "login", "username": "dewi", "src_ip": "192.0.2.60", "result": "locked", "service": "auth-service"}

@@ -1,0 +1,7 @@
+# Hand-written fixture, not a lab capture. JSON Lines in the process log schema of
+# docs/log-schema.md (fields from the team baseline, 11 Nov 2026). Line 1 is the
+# web server forking a shell for request fx-req-0002 of access_rce.jsonl, line 2 an
+# unrelated cron job, line 3 lacks pid and must be skipped.
+{"timestamp": "2026-11-11T02:00:00.300Z", "host": "lab-vm", "container_id": "0123456789abcdef", "pid": 4242, "ppid": 17, "exe": "/bin/sh", "parent_exe": "/usr/local/bin/gunicorn", "cmdline": "sh -c ping -c 1 127.0.0.1;id", "uid": 33, "request_id": "fx-req-0002"}
+{"timestamp": "2026-11-11T02:00:03.000Z", "host": "lab-vm", "container_id": "0123456789abcdef", "pid": 4250, "ppid": 1, "exe": "/usr/sbin/cron", "parent_exe": "/sbin/init", "cmdline": "cron", "uid": 0}
+{"timestamp": "2026-11-11T02:00:04.000Z", "host": "lab-vm", "exe": "/bin/true"}

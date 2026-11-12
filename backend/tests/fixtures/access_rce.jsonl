@@ -1,0 +1,10 @@
+# Hand-written fixture, not a lab capture. JSON Lines in the access log schema of
+# docs/log-schema.md (fields from the team baseline, 11 Nov 2026). RFC 5737
+# documentation IPs. Line 1 is a normal request, line 2 the command injection from
+# tests/fixtures/eve_alerts.py, line 3 another client, line 4 is not JSON and line 5
+# has no UTC offset; both must be skipped.
+{"timestamp": "2026-11-11T01:59:58.000Z", "request_id": "fx-req-0001", "src_ip": "198.51.100.23", "method": "GET", "path": "/", "status": 200, "user_agent": "curl/8.7.1", "service": "web-lab"}
+{"timestamp": "2026-11-11T02:00:00.000Z", "request_id": "fx-req-0002", "src_ip": "198.51.100.23", "method": "GET", "path": "/ping?host=127.0.0.1;id", "status": 200, "user_agent": "curl/8.7.1", "service": "web-lab"}
+{"timestamp": "2026-11-11T02:00:01.000Z", "request_id": "fx-req-0003", "src_ip": "192.0.2.50", "method": "GET", "path": "/ping?host=127.0.0.1", "status": 200, "user_agent": "Mozilla/5.0", "service": "web-lab"}
+this line is not JSON
+{"timestamp": "2026-11-11T02:00:02", "request_id": "fx-req-0004", "src_ip": "198.51.100.23", "method": "GET", "path": "/", "status": 200, "user_agent": "curl/8.7.1", "service": "web-lab"}

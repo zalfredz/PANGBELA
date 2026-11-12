@@ -1,0 +1,59 @@
+# postgres + backend + shipper. The frontend is added in M6. The lab (Suricata, the
+# vulnerable app, telemetry) is the cybersec team's compose file in lab/; it shares
+# data with this one through the two named volumes at the bottom.
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: soc
+      POSTGRES_PASSWORD: soc
+      POSTGRES_DB: soc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soc -d soc"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Inside compose, localhost is the backend container itself, so the .env value
+      # (meant for running the backend on the host) is overridden with the service name.
+      DATABASE_URL: postgresql+psycopg://soc:soc@postgres:5432/soc
+    ports:
+      - "8000:8000"
+    volumes:
+      - lab-logs:/lab-logs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  shipper:
+    build: ./shipper
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - suricata-logs:/var/log/suricata:ro
+      # For SHIPPER_AUTH_LOG_PATH=/lab-logs/auth.log (brute force without an alert).
+      - lab-logs:/lab-logs:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  # Fixed names so the lab compose can mount them as external volumes:
+  # Suricata writes eve.json into suricata-logs; the web server, auth and process
+  # telemetry write access.log, auth.log and process.log into lab-logs.
+  suricata-logs:
+    name: ai-soc-suricata-logs
+  lab-logs:
+    name: ai-soc-lab-logs
