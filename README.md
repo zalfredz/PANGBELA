@@ -57,6 +57,20 @@ uv run ruff check . ../shipper
 uv run uvicorn app.main:app --reload
 ```
 
+## Isolated lab (RCE + brute force)
+
+`lab/` runs a deliberately vulnerable app, an auth service, Suricata and a scenario
+runner on an internal Docker network, writing into the same volumes as the main stack.
+
+```sh
+docker compose up -d --build
+docker compose -f lab/docker-compose.yml --env-file .env up -d --build
+python3 lab/verify_lab.py     # real traffic, deterministic checks, no LLM
+```
+
+Setup, reset and safety notes: `lab/README.md`. Results and remaining gaps:
+`docs/testing/PHASE2_REAL_LAB_REPORT.md`.
+
 ## LLM checks (need LLM_BASE_URL, LLM_API_KEY, LLM_MODEL in .env)
 
 ```sh

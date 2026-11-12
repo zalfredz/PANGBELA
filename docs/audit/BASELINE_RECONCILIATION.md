@@ -83,3 +83,18 @@ It is **not** a lab capture and is not counted as T1–T9 evidence.
   matching request id", not "unauthorized execution". Needs a lab-side policy field.
 - **P1 auto-patch**: not implemented. The current policy table therefore only covers
   containment/recommendation actions.
+
+## Update 2026-11-13 — Phase 2 (real lab)
+
+| Item | Before (this file, first section) | Now |
+|---|---|---|
+| RCE `confirmed` | linked child only | linked child **and** lab policy `authorized=false`; authorized/unverified linkage stays `attempted` (unverified → `partially_verified`) |
+| Host telemetry missing | gap | `insufficient_telemetry`, proven with real lab traffic (T9) |
+| Lab | missing | `lab/` with app, auth, Suricata, runner; see `docs/testing/PHASE2_REAL_LAB_REPORT.md` |
+| T1/T2/T5/T6/T7 | unverified | PASS on real lab traffic (deterministic layer) |
+| T3/T4/T8 | unverified | T3/T4 BLOCKED (need pipeline/trusted benign source); T8 rules-level only |
+| Live LLM | blocked | still blocked (GATER credits) |
+| Tests | 248 → 250 | 254 passed |
+
+The lab's `authorized` fact comes from app instrumentation (documented fallback for
+Falco), so the assurance ceiling in `docs/security/INCIDENT_DECISION_POLICY.md` applies.

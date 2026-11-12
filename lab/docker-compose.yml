@@ -1,0 +1,105 @@
+# Isolated lab for the two MVP attack types. It attaches to the main stack's named
+# volumes and network, so start the main compose first:
+#   docker compose -f lab/docker-compose.yml --env-file .env up -d --build
+# Run one scenario at a time (the integration script resets state between runs):
+#   docker compose -f lab/docker-compose.yml --env-file .env run --rm runner python runner.py T1
+name: pangbela-lab
+
+services:
+  app:
+    build: .
+    command: python app.py
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    environment:
+      # 1 = the app stops writing process.log (T9: host telemetry missing).
+      PROCESS_LOG_DISABLED: "${PROCESS_LOG_DISABLED:-0}"
+    volumes:
+      - lab-logs:/lab-logs
+    networks: [lab]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # The named volume arrives root-owned; Suricata's config runs as the suricata user.
+  # One-shot fixer instead of a privileged entrypoint override.
+  logs-init:
+    build: .
+    command: ["sh", "-c", "chmod 777 /var/log/suricata && chmod 666 /var/log/suricata/eve.json 2>/dev/null || true"]
+    volumes:
+      - suricata-logs:/var/log/suricata
+
+  # Shares the app's network namespace, so it sees exactly the lab traffic to the app.
+  suricata:
+    image: jasonish/suricata:latest
+    network_mode: "service:app"
+    depends_on:
+      app:
+        condition: service_healthy
+      logs-init:
+        condition: service_completed_successfully
+    command: ["-i", "eth0", "-S", "/lab/lab.rules", "-l", "/var/log/suricata"]
+    cap_drop: ["ALL"]
+    # NET_* to sniff, DAC_OVERRIDE to read the image's root-only config, SETUID/SETGID/
+    # CHOWN because Suricata drops to its own user, SYS_NICE to silence its warning.
+    cap_add: ["NET_ADMIN", "NET_RAW", "DAC_OVERRIDE", "SETUID", "SETGID", "CHOWN", "SYS_NICE", "SETPCAP"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    volumes:
+      - ./suricata/lab.rules:/lab/lab.rules:ro
+      - suricata-logs:/var/log/suricata
+
+  auth:
+    build: .
+    command: python auth.py
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    environment:
+      # Read from the shell or --env-file .env; never baked into the image.
+      INGEST_TOKEN: "${INGEST_TOKEN:?set INGEST_TOKEN, e.g. --env-file .env}"
+      AUTH_INGEST_URL: "http://backend:8000/ingest/auth"
+    volumes:
+      - lab-logs:/lab-logs
+    networks: [lab, ingest]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8081/healthz')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  runner:
+    build: .
+    command: python runner.py T1
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [lab]
+    # Not started by `up`: one scenario per `run`, reset in between.
+    profiles: ["tools"]
+
+volumes:
+  lab-logs:
+    name: ai-soc-lab-logs
+    external: true
+  suricata-logs:
+    name: ai-soc-suricata-logs
+    external: true
+
+networks:
+  lab:
+    # No route to the Internet or the host; only these containers share it.
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+  # The main stack's network, for the auth service's ingest posts only.
+  ingest:
+    name: ai-soc-net
+    external: true

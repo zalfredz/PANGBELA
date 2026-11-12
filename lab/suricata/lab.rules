@@ -1,0 +1,2 @@
+alert http any any -> any any (msg:"LAB Web RCE command injection attempt"; flow:to_server,established; content:"/vuln/ping"; http_uri; content:"|3b|"; http_uri; metadata:lab_scenario command_injection; sid:1000001; rev:1;)
+alert http any any -> any any (msg:"LAB scanner probe"; flow:to_server,established; content:"/admin"; http_uri; metadata:lab_scenario scan; sid:1000009; rev:1;)

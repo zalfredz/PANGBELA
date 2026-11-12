@@ -57,3 +57,8 @@ volumes:
     name: ai-soc-suricata-logs
   lab-logs:
     name: ai-soc-lab-logs
+
+networks:
+  # Fixed name so lab/docker-compose.yml can attach its auth service to this network.
+  default:
+    name: ai-soc-net

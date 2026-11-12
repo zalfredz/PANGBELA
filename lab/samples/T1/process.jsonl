@@ -1,0 +1,1 @@
+{"timestamp": "2026-11-12T18:25:25.164041+00:00", "host": "e402c303f689", "container_id": "e402c303f689", "pid": 66, "ppid": 1, "exe": "/usr/bin/dash", "parent_exe": "/usr/local/bin/python3.12", "cmdline": "/bin/sh -c sleep 0.2; printf LAB_RCE_OK", "uid": "0", "request_id": "b31076e05e5d416d8d8bd55b25f28c57", "authorized": false}
