@@ -64,6 +64,11 @@ class Facts:
     exec_unlinked: bool = False
     # An unlinked one fell in the window of more than one request.
     ambiguous: bool = False
+    # Among linked executions, what the lab's own execution policy said: not allowed
+    # (unauthorized), allowed, or not stated at all. Linkage alone is not proof.
+    exec_unauthorized: bool = False
+    exec_authorized: bool = False
+    exec_unverified: bool = False
     failures: int = 0
     success_after: bool = False
     # Among the successes after the first failure: one the lab marked authorized=false,
@@ -146,6 +151,7 @@ def compute_facts(
     before = timedelta(seconds=cfg.CORRELATION_WINDOW_BEFORE_SECONDS)
     after = timedelta(seconds=cfg.CORRELATION_WINDOW_SECONDS)
     exec_linked = exec_unlinked = ambiguous = False
+    exec_authorized = exec_unauthorized = exec_unverified = False
     for p in by_source.get("process", []):
         if not _is_web_server(p.fields.get("parent_exe"), cfg.web_server_exes):
             continue
@@ -155,6 +161,13 @@ def compute_facts(
         rid = p.fields.get("request_id")
         if rid and any(r.fields.get("request_id") == rid for r in candidates):
             exec_linked = True
+            allowed = p.fields.get("authorized")
+            if allowed is False:
+                exec_unauthorized = True
+            elif allowed is True:
+                exec_authorized = True
+            else:
+                exec_unverified = True
         else:
             exec_unlinked = True
             ambiguous = ambiguous or len(candidates) > 1
@@ -179,6 +192,9 @@ def compute_facts(
         exec_linked=exec_linked,
         exec_unlinked=exec_unlinked,
         ambiguous=ambiguous,
+        exec_unauthorized=exec_unauthorized,
+        exec_authorized=exec_authorized,
+        exec_unverified=exec_unverified,
         failures=failures,
         success_after=bool(successes),
         unauthorized_success=any(e.fields.get("authorized") is False for e in successes),
@@ -189,9 +205,11 @@ def compute_facts(
 
 def max_status(attack_type: str, f: Facts, cfg: Settings) -> str:
     if attack_type == "rce":
-        if f.exec_linked:
+        # Linkage proves a request and an execution are related. Only the lab's own
+        # execution policy can say the execution was not allowed.
+        if f.exec_unauthorized:
             return "confirmed"
-        if f.payload_logged:
+        if f.exec_linked or f.payload_logged:
             return "attempted"
         return "suspected"
     if attack_type == "brute_force":
@@ -216,6 +234,9 @@ def verification_state(attack_type: str, f: Facts) -> str:
         return INSUFFICIENT
     if attack_type == "unknown":
         return PARTIAL  # the attack type itself is unresolved
+    if attack_type == "rce" and f.exec_linked and f.exec_unverified:
+        # The execution happened, but no trusted policy says whether it was allowed.
+        return PARTIAL
     if attack_type == "rce" and f.exec_unlinked and not f.exec_linked:
         return PARTIAL
     if attack_type == "brute_force" and f.unmarked_success and not f.unauthorized_success:

@@ -27,18 +27,21 @@ probability.
 | Level | Required evidence |
 |---|---|
 | `suspected` | a classified RCE alert |
-| `attempted` | alert **and** a matching request in the access log (path match) |
-| `confirmed` | the two above, **and** a process event whose parent is the configured web server **and** whose `request_id` matches the request inside −2 s/+10 s |
+| `attempted` | alert **and** a matching request in the access log (path match), or a linked execution the lab's policy allows |
+| `confirmed` | alert, matching request, a process event whose parent is the configured web server **and** whose `request_id` matches inside −2 s/+10 s, **and** the lab's execution policy says `authorized=false` |
 
 `WEB_SERVER_EXES` empty means RCE can never be confirmed. `RCE_SIGNATURE_IDS` must be
 validated against the lab's own Suricata rules before it is set.
 
-**Known gap (P0).** The third row proves *linkage*, not *lack of authorization*. A web
-application that legitimately spawns the same child with a request id would also match.
-The MVP must not claim "unauthorized execution" until the lab emits an authorization
-fact (for example `process_log.fields.authorized=false` from the application's own
-policy) or an allowlist of approved child executables per endpoint. Until then, treat
-`confirmed` as "request-linked execution" and say so in the demo.
+Linkage alone is not confirmation. A linked child with `authorized=true` is a legitimate
+execution (status stays `attempted` because an alert fired). A linked child with no
+authorization field is `attempted` + `partially_verified`: the execution is real, the
+policy answer is missing.
+
+**Assurance ceiling.** The authorization fact currently comes from the lab app's own
+instrumentation (the documented Falco fallback). A compromised app could forge it.
+Before claiming tamper resistance, move process telemetry to a host-level sensor (Falco/
+eBPF) that derives the policy decision outside the application.
 
 Negative outcomes that must hold in the lab matrix:
 

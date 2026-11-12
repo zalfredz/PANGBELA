@@ -26,6 +26,11 @@ def parse(line: str) -> jsonl.Record:
     uid = jsonl.ident(obj, "uid")
     host = jsonl.text(obj, "host")
     container_id = jsonl.text(obj, "container_id")
+    # The lab's execution policy, written by the sensor that observed the process.
+    # Anything but a JSON boolean counts as not stated.
+    authorized = obj.get("authorized")
+    if not isinstance(authorized, bool):
+        authorized = None
     where = container_id[:12] if container_id else (host or "?")[:40]
     parent = posixpath.basename(parent_exe)[:60] if parent_exe else "?"
     return jsonl.Record(
@@ -46,6 +51,7 @@ def parse(line: str) -> jsonl.Record:
             "cmdline": jsonl.text(obj, "cmdline"),
             "uid": uid,
             "request_id": jsonl.ident(obj, "request_id"),
+            "authorized": authorized,
         },
         raw=line,
     )

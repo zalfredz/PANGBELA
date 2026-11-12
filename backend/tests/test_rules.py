@@ -70,8 +70,18 @@ def request(seconds=0.0, path="/ping", ip=ATTACKER, request_id="req-1") -> Evide
     return ev("access_log", seconds, ip=ip, path=path, query="host=1;id", request_id=request_id)
 
 
-def proc(seconds, parent="/usr/local/bin/gunicorn", request_id="req-1") -> EvidenceEvent:
-    return ev("process", seconds, ip=None, parent_exe=parent, exe="/bin/sh", request_id=request_id)
+def proc(
+    seconds, parent="/usr/local/bin/gunicorn", request_id="req-1", authorized=None
+) -> EvidenceEvent:
+    return ev(
+        "process",
+        seconds,
+        ip=None,
+        parent_exe=parent,
+        exe="/bin/sh",
+        request_id=request_id,
+        authorized=authorized,
+    )
 
 
 def auth(seconds, result, ip=ATTACKER, authorized=None) -> EvidenceEvent:
@@ -108,8 +118,11 @@ def investigation(ruled_benign=False, findings=True) -> InvestigationOutput:
 @pytest.mark.parametrize(
     ("f", "expected"),
     [
-        (Facts(exec_linked=True, payload_logged=True), "confirmed"),
-        (Facts(exec_linked=True), "confirmed"),
+        (Facts(exec_linked=True, payload_logged=True, exec_unauthorized=True), "confirmed"),
+        (Facts(exec_linked=True, exec_unauthorized=True), "confirmed"),
+        # Linkage without the lab's authorization fact is not confirmation.
+        (Facts(exec_linked=True), "attempted"),
+        (Facts(exec_linked=True, exec_authorized=True), "attempted"),
         (Facts(exec_unlinked=True, payload_logged=True), "attempted"),
         (Facts(payload_logged=True), "attempted"),
         (Facts(exec_unlinked=True), "suspected"),
@@ -150,7 +163,11 @@ def test_threshold_comes_from_config():
 
 RCE_ATTEMPTED = Facts(payload_logged=True, sources_available=frozenset({"suricata", "access_log"}))
 RCE_CONFIRMED = Facts(
-    payload_logged=True, exec_linked=True, host_available=True, sources_available=RCE_SOURCES
+    payload_logged=True,
+    exec_linked=True,
+    exec_unauthorized=True,
+    host_available=True,
+    sources_available=RCE_SOURCES,
 )
 
 
@@ -220,7 +237,7 @@ def test_gate_unknown_attack_type():
 )
 def test_severity_map(attack_type, status, severity):
     f = {
-        ("rce", "confirmed"): Facts(exec_linked=True),
+        ("rce", "confirmed"): Facts(exec_linked=True, exec_unauthorized=True),
         ("rce", "attempted"): Facts(payload_logged=True),
         ("rce", "suspected"): Facts(),
         ("brute_force", "confirmed"): Facts(
@@ -258,6 +275,13 @@ def test_coverage_is_share_of_required_sources():
     [
         ("rce", RCE_CONFIRMED, VERIFIED),
         ("rce", Facts(payload_logged=True, sources_available=RCE_SOURCES), VERIFIED),
+        # Linked execution with no authorization fact: the execution is real, whether it
+        # was allowed is not settled.
+        (
+            "rce",
+            Facts(exec_linked=True, exec_unverified=True, sources_available=RCE_SOURCES),
+            PARTIAL,
+        ),
         ("rce", Facts(exec_unlinked=True, sources_available=RCE_SOURCES), PARTIAL),
         (
             "rce",
@@ -469,7 +493,7 @@ def gate(attack_type, evidence, proposed, inv=None, readable=ALL_READABLE):
 
 
 def test_t1_successful_rce_confirmed_critical():
-    g = gate("rce", [alert(), request(0), proc(1)], "confirmed")
+    g = gate("rce", [alert(), request(0), proc(1, authorized=False)], "confirmed")
     assert (g.status, g.severity, g.verification, g.confidence_level) == (
         "confirmed",
         "critical",
@@ -481,6 +505,14 @@ def test_t1_successful_rce_confirmed_critical():
 def test_t2_failed_rce_attempted_medium():
     g = gate("rce", [alert(), request(0)], "attempted")
     assert (g.status, g.severity, g.verification) == ("attempted", "medium", VERIFIED)
+
+
+def test_legitimate_authorized_child_is_never_confirmed():
+    # The lab's policy allowed this execution for the endpoint: an IDS alert plus a
+    # linked child is still not proof of exploitation.
+    g = gate("rce", [alert(), request(0), proc(1, authorized=True)], "confirmed")
+    assert (g.status, g.severity) == ("attempted", "medium")
+    assert g.conflict == "proposed confirmed, rules allow attempted"
 
 
 def test_t3_scanner_sweep_without_classified_exploit_is_suspected():
