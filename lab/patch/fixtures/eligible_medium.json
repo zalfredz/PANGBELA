@@ -1,0 +1,8 @@
+{
+  "id": "fixture-eligible-medium",
+  "note": "Policy fixture for the patch executor. NOT detector output; a real incident reaches this state only after the LLM pipeline is available.",
+  "severity": "medium",
+  "attack_type": "rce",
+  "pipeline_state": "done",
+  "verification_state": "verified"
+}

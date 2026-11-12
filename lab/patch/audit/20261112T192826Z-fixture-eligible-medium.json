@@ -1,0 +1,55 @@
+{
+  "incident": "fixture-eligible-medium",
+  "decision": {
+    "allowed": true,
+    "reason": "eligible"
+  },
+  "template": {
+    "id": "v1_sanitize_ping",
+    "version": "1",
+    "applies_to": "pangbela-lab-app",
+    "file": "app.py",
+    "sha256": "a4143b8cf71dcccd840fd6aacca41a79ef7bdedd3c7966e3cbd43c544b52f5f1",
+    "description": "Replace the shell invocation in /vuln/ping with a fixed argv; unsigned injection attempts are refused before exec."
+  },
+  "target": {
+    "id": "lab-web",
+    "service": "app",
+    "image": "pangbela-lab-app",
+    "criticality": "lab",
+    "managed": true
+  },
+  "fixture": true,
+  "source_container": "baae811617f8eb159a0612b5b5c1acd08712eb3fc58489a0008c45168fc762cf",
+  "image": {
+    "name": "pangbela-lab-app",
+    "id": "sha256:34c530a286e551bc6a6375abbbb1b1dd23dee6671b4987c133c4e2aa7ef29754"
+  },
+  "clone": "pangbela-patch-5428888f",
+  "before_sha256": "22b7a0740a524335fa32eea8b719a31e025a0fcffe79ce2488d0fbe64918083a",
+  "after_sha256": "a4143b8cf71dcccd840fd6aacca41a79ef7bdedd3c7966e3cbd43c544b52f5f1",
+  "checks": [
+    {
+      "check": "health",
+      "value": "200 ok",
+      "pass": true
+    },
+    {
+      "check": "attack_blocked",
+      "value": "400 refused: payload not in the lab allowlist",
+      "pass": true
+    },
+    {
+      "check": "safe_endpoint",
+      "value": "200 ok 127.0.0.1",
+      "pass": true
+    }
+  ],
+  "forced_failure": true,
+  "rollback_check": {
+    "vulnerable_again": true,
+    "value": "200 LAB_RCE_OK"
+  },
+  "result": "rolled_back",
+  "recorded_at": "2026-11-12T19:28:26.548329+00:00"
+}

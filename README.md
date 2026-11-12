@@ -73,6 +73,18 @@ The lab also needs `LAB_APPROVAL_SECRET` (signed maintenance operations, T4) and
 Results: `docs/testing/PHASE2_REAL_LAB_REPORT.md`,
 `docs/testing/PHASE3_VALIDATION_REPORT.md`.
 
+## Controlled patch demo (Phase 4, lab clone only)
+
+```sh
+python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.json           # denied by default
+python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.json --enable --dry-run
+python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.json --enable
+python3 lab/patch/apply.py --incident-file lab/patch/fixtures/eligible_medium.json --enable --force-failure
+```
+
+Policy, eligibility and limits: `docs/security/PAMELA_PATCH_POLICY.md`.
+Evidence and matrix: `docs/testing/PHASE4_PATCH_REPORT.md`.
+
 ## LLM checks (need LLM_BASE_URL, LLM_API_KEY, LLM_MODEL in .env)
 
 ```sh

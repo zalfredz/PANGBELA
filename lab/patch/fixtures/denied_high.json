@@ -1,0 +1,8 @@
+{
+  "id": "fixture-denied-high",
+  "note": "Policy fixture: high severity must never auto-patch.",
+  "severity": "high",
+  "attack_type": "rce",
+  "pipeline_state": "done",
+  "verification_state": "verified"
+}

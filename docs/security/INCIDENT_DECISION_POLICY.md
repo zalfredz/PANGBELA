@@ -105,11 +105,14 @@ a firewall, account, or host itself. Actions: `block_ip`, `monitor`, `reset_pass
 | high | **no** | required | alert + human response |
 | critical | **no** | required | escalation + human containment |
 
-Patching (`patch_endpoint`) is **not executable** in this MVP: it is always a manual
-task, at every severity. The agreed Low/Medium conditional auto-patch flow (allowlisted
-template, dry run, staging test, health check, rollback, audit) is not implemented and
-must not be described as working. Destructive actions (host isolation, password reset,
-IP blocking) stay human-approved until a separate policy is tested.
+Patching is a separate policy (`docs/security/PAMELA_PATCH_POLICY.md`). The backend never
+applies a patch: `patch_endpoint` remains `manual_only` in the API. A Phase 4 operator tool
+can apply one allowlisted template to a **disposable clone** of the lab image, after a
+deterministic eligibility check (low/medium, done, verified, managed lab asset, template
+hash match). It is off by default, rolls back on failed verification, and writes an audit
+file. It is not reachable from the LLM, the dashboard, or any HTTP endpoint.
+Destructive actions (host isolation, password reset, IP blocking) stay human-approved
+until a separate policy is tested.
 
 ## 6. Operator authentication
 

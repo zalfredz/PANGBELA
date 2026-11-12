@@ -1,0 +1,11 @@
+{
+  "targets": [
+    {
+      "id": "lab-web",
+      "service": "app",
+      "image": "pangbela-lab-app",
+      "criticality": "lab",
+      "managed": true
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "incident": "fixture-denied-high",
+  "decision": {
+    "allowed": false,
+    "reason": "needs_human"
+  },
+  "template": {
+    "id": "v1_sanitize_ping",
+    "version": "1",
+    "applies_to": "pangbela-lab-app",
+    "file": "app.py",
+    "sha256": "a4143b8cf71dcccd840fd6aacca41a79ef7bdedd3c7966e3cbd43c544b52f5f1",
+    "description": "Replace the shell invocation in /vuln/ping with a fixed argv; unsigned injection attempts are refused before exec."
+  },
+  "target": {
+    "id": "lab-web",
+    "service": "app",
+    "image": "pangbela-lab-app",
+    "criticality": "lab",
+    "managed": true
+  },
+  "fixture": true,
+  "result": "denied",
+  "recorded_at": "2026-11-12T19:27:53.172207+00:00"
+}
