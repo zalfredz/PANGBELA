@@ -315,12 +315,15 @@ function EvidenceList({ items }: { items: Evidence[] }) {
 
 // --- what to do -----------------------------------------------------------------------
 
-const NAME_KEY = "ai-soc.decided-by";
+// The operator token is a lab credential, kept in sessionStorage only for the tab's
+// lifetime. shortcut: no login/session yet, so any script on the page could read it;
+// upgrade to a server-side session before this leaves the isolated lab.
+const TOKEN_KEY = "ai-soc.operator-token";
 
 function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onChanged: () => void }) {
-  const [name, setName] = useState(() => {
+  const [token, setToken] = useState(() => {
     try {
-      return typeof window === "undefined" ? "" : (localStorage.getItem(NAME_KEY) ?? "");
+      return typeof window === "undefined" ? "" : (sessionStorage.getItem(TOKEN_KEY) ?? "");
     } catch {
       return "";
     }
@@ -343,7 +346,7 @@ function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onC
   const pending = recs.filter((r) => r.status === "pending");
   const forPamela = pending.filter((r) => pamelaReason === null && r.system_target !== null);
   const activeActions = d.actions.filter((a) => isActive(a));
-  const who = name.trim();
+  const authToken = token.trim();
 
   async function act(key: string, fn: () => Promise<unknown>) {
     setBusy(key);
@@ -365,7 +368,7 @@ function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onC
     let done = 0;
     for (const r of forPamela) {
       try {
-        await handToPamela(r.id);
+        await handToPamela(r.id, authToken);
         done += 1;
       } catch (e) {
         setErrors((x) => ({ ...x, [r.id]: errorText(e) }));
@@ -405,25 +408,25 @@ function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onC
 
       {(pending.length > 0 || activeActions.length > 0) && (
         <label className="flex max-w-sm flex-col gap-1">
-          <span className="text-sm font-medium">Nama Anda</span>
+          <span className="text-sm font-medium">Token operator</span>
           <input
-            value={name}
+            type="password"
+            value={token}
             onChange={(e) => {
-              setName(e.target.value);
+              setToken(e.target.value);
               try {
-                localStorage.setItem(NAME_KEY, e.target.value);
+                sessionStorage.setItem(TOKEN_KEY, e.target.value);
               } catch {
-                // Private mode or blocked storage: the name just isn't remembered.
+                // Private mode or blocked storage: the token just isn't remembered.
               }
             }}
-            maxLength={100}
-            autoComplete="name"
-            aria-describedby="name-help"
+            autoComplete="off"
+            aria-describedby="token-help"
             className="min-h-11 rounded border border-line bg-surface px-3"
           />
-          <span id="name-help" className="text-sm text-muted">
-            Dicatat bersama keputusan Anda. Wajib untuk menyetujui, menolak, atau membatalkan.
-            PAMELA tidak butuh nama.
+          <span id="token-help" className="text-sm text-muted">
+            Dikirim sebagai X-Operator-Token; nama pencatat diambil server, bukan dari isian.
+            Wajib untuk menyetujui, menolak, atau membatalkan. PAMELA tidak butuh token.
           </span>
         </label>
       )}
@@ -462,22 +465,22 @@ function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onC
                     <Button
                       variant="primary"
                       disabled={busy !== null}
-                      onClick={() => act(r.id, () => handToPamela(r.id))}
+                      onClick={() => act(r.id, () => handToPamela(r.id, authToken))}
                     >
                       {busy === r.id ? "PAMELA sedang bekerja…" : "Serahkan ke PAMELA"}
                     </Button>
                   ) : (
                     <Button
                       variant="primary"
-                      disabled={!who || busy !== null}
-                      onClick={() => act(r.id, () => decideRecommendation(r.id, "approved", who))}
+                      disabled={!authToken || busy !== null}
+                      onClick={() => act(r.id, () => decideRecommendation(r.id, "approved", authToken))}
                     >
                       {r.system_target ? "Setujui dan jalankan" : "Setujui, saya kerjakan manual"}
                     </Button>
                   )}
                   <Button
-                    disabled={!who || busy !== null}
-                    onClick={() => act(r.id, () => decideRecommendation(r.id, "rejected", who))}
+                    disabled={!authToken || busy !== null}
+                    onClick={() => act(r.id, () => decideRecommendation(r.id, "rejected", authToken))}
                   >
                     Tolak
                   </Button>
@@ -488,8 +491,8 @@ function Recommendations({ detail: d, onChanged }: { detail: IncidentDetail; onC
 
               {action && isActive(action) && (
                 <Button
-                  disabled={!who || busy !== null}
-                  onClick={() => act(action.id, () => revertAction(action.id, who))}
+                  disabled={!authToken || busy !== null}
+                  onClick={() => act(action.id, () => revertAction(action.id, authToken))}
                 >
                   Batalkan tindakan ini
                 </Button>

@@ -20,6 +20,13 @@ curl localhost:8000/health  # {"db":"ok","llm_configured":true} once LLM_* is se
 
 Inside compose the backend always talks to the `postgres` service; `DATABASE_URL` in `.env` is used when running the backend on the host.
 
+Approving, rejecting, reverting, or handing an action to PAMELA needs an operator token:
+set `OPERATOR_TOKENS=name:<openssl rand -hex 32>` in `.env` and enter the same token in
+the dashboard's "Token operator" field (`X-Operator-Token`). With no operators configured
+those endpoints return 503 on purpose. Policy and evidence requirements:
+`docs/security/INCIDENT_DECISION_POLICY.md`; current gaps:
+`docs/audit/BASELINE_RECONCILIATION.md`.
+
 How an alert flows: the lab's Suricata writes `eve.json` into the `ai-soc-suricata-logs` volume, the `shipper` service posts alert lines to `POST /ingest/suricata`, and the backend groups them into incidents. Once an incident has been quiet for `PIPELINE_DEBOUNCE_SECONDS`, a background loop runs the agent pipeline on it, one incident at a time. Web, auth and process logs are read from the `ai-soc-lab-logs` volume, mounted at `/lab-logs`.
 
 Watch a run live:

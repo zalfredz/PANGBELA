@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     PROTECTED_IPS: str = ""
     # The lab sends it as X-Enforcement-Token to GET /enforcement. Empty = endpoint off.
     ENFORCEMENT_TOKEN: str = ""
+    # Comma-separated name:token pairs, e.g. "analyst-a:<32+ chars>". Every decision,
+    # PAMELA hand-off and revert must send its token as X-Operator-Token; the recorded
+    # operator name comes from this map, never from the request body. Empty = the three
+    # response endpoints fail closed with 503.
+    OPERATOR_TOKENS: str = ""
 
     @field_validator("RCE_SIGNATURE_IDS", "BRUTE_FORCE_SIGNATURE_IDS")
     @classmethod
@@ -85,7 +90,32 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _signature_ids_disjoint(self) -> "Settings":
         _ = self.signature_attack_types  # raises if an id is under both types
+        _ = self.operator_tokens  # raises on a malformed entry
         return self
+
+    @property
+    def operator_tokens(self) -> dict[str, str]:
+        """token -> operator name. Tokens are the only credential: the name is never
+        taken from a request body, so a caller cannot sign as somebody else."""
+        out: dict[str, str] = {}
+        names: set[str] = set()
+        for part in self.OPERATOR_TOKENS.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            name, sep, token = part.partition(":")
+            name, token = name.strip(), token.strip()
+            if not sep or not name or len(token) < 32:
+                raise ValueError(
+                    f"OPERATOR_TOKENS entry must be name:token with a 32+ char token: {part!r}"
+                )
+            if name.casefold() == "pamela":
+                raise ValueError("PAMELA is reserved for the automatic helper")
+            if name.casefold() in names or token in out:
+                raise ValueError(f"duplicate operator name or token: {name!r}")
+            names.add(name.casefold())
+            out[token] = name
+        return out
 
     @property
     def llm_configured(self) -> bool:

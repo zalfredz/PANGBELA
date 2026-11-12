@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.main import app
+from tests.support import AUTH, OPERATOR_NAME
 from tests.test_api import make_incident
 from tests.test_pipeline import detection_reply, forensics_reply, investigation_reply, run
 
@@ -69,7 +70,7 @@ def test_pamela_blocks_the_incident_source_not_the_agent_target(client, engine):
     rec = recs_by_action(client, incident_id)["block_ip"]
     assert rec["system_target"] == SRC and rec["manual_reason"] is None
 
-    r = client.post(f"/recommendations/{rec['id']}/pamela")
+    r = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "approved" and body["decided_by"] == "PAMELA"
@@ -82,7 +83,7 @@ def test_pamela_refuses_high_severity(client, engine):
     incident_id = analysed(engine)
     set_incident(engine, incident_id, severity="high")
     rec = recs_by_action(client, incident_id)["block_ip"]
-    r = client.post(f"/recommendations/{rec['id']}/pamela")
+    r = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert r.status_code == 403 and r.json()["error"] == "needs_human"
     assert recs_by_action(client, incident_id)["block_ip"]["status"] == "pending"
     detail = client.get(f"/incidents/{incident_id}").json()
@@ -93,7 +94,7 @@ def test_pamela_refuses_while_agents_run(client, engine):
     incident_id = analysed(engine)
     set_incident(engine, incident_id, pipeline_state="running")
     rec = recs_by_action(client, incident_id)["block_ip"]
-    r = client.post(f"/recommendations/{rec['id']}/pamela")
+    r = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert r.status_code == 403 and r.json()["error"] == "not_decided"
 
 
@@ -101,7 +102,7 @@ def test_pamela_cannot_patch(client, engine):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["patch_endpoint"]
     assert rec["manual_reason"] == "manual_only"
-    r = client.post(f"/recommendations/{rec['id']}/pamela")
+    r = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert r.status_code == 422 and r.json()["error"] == "manual_only"
 
 
@@ -110,7 +111,7 @@ def test_reset_password_needs_one_account_in_the_evidence(client, engine):
     incident_id = analysed(engine, (("reset_password", "admin"),))
     rec = recs_by_action(client, incident_id)["reset_password"]
     assert rec["manual_reason"] == "no_account"
-    assert client.post(f"/recommendations/{rec['id']}/pamela").status_code == 422
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 422
 
 
 def test_protected_ip_is_never_blocked(client, engine, monkeypatch):
@@ -118,11 +119,10 @@ def test_protected_ip_is_never_blocked(client, engine, monkeypatch):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
     assert rec["manual_reason"] == "protected_ip"
-    assert client.post(f"/recommendations/{rec['id']}/pamela").status_code == 422
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 422
     # A person may still approve; it is recorded, but nothing goes on the list.
     r = client.post(
-        f"/recommendations/{rec['id']}/decision",
-        json={"decision": "approved", "decided_by": "Devan"},
+        f"/recommendations/{rec['id']}/decision", json={"decision": "approved"}, headers=AUTH,
     )
     assert r.status_code == 200 and r.json()["action"] is None
 
@@ -131,18 +131,18 @@ def test_pamela_off_when_max_severity_none(client, engine, monkeypatch):
     monkeypatch.setattr(settings, "PAMELA_MAX_SEVERITY", "none")
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
-    assert client.post(f"/recommendations/{rec['id']}/pamela").status_code == 403
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 403
 
 
 def test_pamela_on_decided_recommendation_is_409(client, engine):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
-    assert client.post(f"/recommendations/{rec['id']}/pamela").status_code == 200
-    assert client.post(f"/recommendations/{rec['id']}/pamela").status_code == 409
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 200
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 409
 
 
 def test_pamela_unknown_recommendation_is_404(client):
-    assert client.post(f"/recommendations/{uuid4()}/pamela").status_code == 404
+    assert client.post(f"/recommendations/{uuid4()}/pamela", headers=AUTH).status_code == 404
 
 
 # --- decisions by a person -----------------------------------------------------------
@@ -153,11 +153,10 @@ def test_person_approves_high_severity_and_it_is_carried_out(client, engine):
     set_incident(engine, incident_id, severity="high")
     rec = recs_by_action(client, incident_id)["block_ip"]
     r = client.post(
-        f"/recommendations/{rec['id']}/decision",
-        json={"decision": "approved", "decided_by": "Boston"},
+        f"/recommendations/{rec['id']}/decision", json={"decision": "approved"}, headers=AUTH,
     )
     assert r.status_code == 200
-    assert r.json()["action"]["executed_by"] == "Boston"
+    assert r.json()["action"]["executed_by"] == OPERATOR_NAME
     assert r.json()["action"]["by_pamela"] is False
 
 
@@ -165,27 +164,54 @@ def test_reject_carries_nothing_out(client, engine):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
     r = client.post(
-        f"/recommendations/{rec['id']}/decision",
-        json={"decision": "rejected", "decided_by": "Boston"},
+        f"/recommendations/{rec['id']}/decision", json={"decision": "rejected"}, headers=AUTH,
     )
     assert r.json()["status"] == "rejected" and r.json()["action"] is None
     assert client.get(f"/incidents/{incident_id}").json()["actions"] == []
 
 
-@pytest.mark.parametrize("name", ["PAMELA", " pamela "])
-def test_person_cannot_sign_as_pamela(client, engine, name):
+def test_decision_requires_an_operator_token(client, engine):
+    incident_id = analysed(engine)
+    rec = recs_by_action(client, incident_id)["block_ip"]
+    path = f"/recommendations/{rec['id']}/decision"
+    body = {"decision": "approved"}
+    assert client.post(path, json=body).status_code == 401
+    assert client.post(path, json=body, headers={"X-Operator-Token": "x" * 40}).status_code == 401
+
+
+def test_decision_body_cannot_choose_the_operator_name(client, engine):
+    # A caller with a valid token still cannot sign as somebody else: the name is the
+    # one the server maps to the token, and the body field is ignored.
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
     r = client.post(
-        f"/recommendations/{rec['id']}/decision", json={"decision": "approved", "decided_by": name}
+        f"/recommendations/{rec['id']}/decision",
+        json={"decision": "approved", "decided_by": "PAMELA"},
+        headers=AUTH,
     )
-    assert r.status_code == 422
+    assert r.status_code == 200
+    assert r.json()["decided_by"] == OPERATOR_NAME
+
+
+def test_response_endpoints_fail_closed_without_operator_tokens(client, engine, monkeypatch):
+    monkeypatch.setattr(settings, "OPERATOR_TOKENS", "")
+    incident_id = analysed(engine)
+    rec = recs_by_action(client, incident_id)["block_ip"]
+    assert client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).status_code == 503
+    assert (
+        client.post(
+            f"/recommendations/{rec['id']}/decision",
+            json={"decision": "approved"},
+            headers=AUTH,
+        ).status_code
+        == 503
+    )
 
 
 def test_rerun_does_not_ask_again_about_a_decided_action(client, engine):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
-    client.post(f"/recommendations/{rec['id']}/pamela")
+    client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     run(
         incident_id,
         [detection_reply, investigation_reply(), forensics_reply, decision_with(*DEFAULT_RECS)],
@@ -215,8 +241,12 @@ def test_enforcement_lists_active_actions_and_records_the_pull(client, engine, m
     monkeypatch.setattr(settings, "ENFORCEMENT_TOKEN", "right")
     incident_id = analysed(engine, (("block_ip", SRC), ("monitor", SRC)))
     recs = recs_by_action(client, incident_id)
-    blocked = client.post(f"/recommendations/{recs['block_ip']['id']}/pamela").json()["action"]
-    watched = client.post(f"/recommendations/{recs['monitor']['id']}/pamela").json()["action"]
+    blocked = client.post(
+        f"/recommendations/{recs['block_ip']['id']}/pamela", headers=AUTH
+    ).json()["action"]
+    watched = client.post(
+        f"/recommendations/{recs['monitor']['id']}/pamela", headers=AUTH
+    ).json()["action"]
     assert client.get(f"/incidents/{incident_id}").json()["lab_last_pull_at"] is None
 
     r = client.get("/enforcement", headers={"X-Enforcement-Token": "right"})
@@ -230,7 +260,7 @@ def test_enforcement_lists_active_actions_and_records_the_pull(client, engine, m
 
     # Reverted and expired rows drop off the list.
     assert (
-        client.post(f"/actions/{blocked['id']}/revert", json={"reverted_by": "Boston"}).status_code
+        client.post(f"/actions/{blocked['id']}/revert", headers=AUTH).status_code
         == 200
     )
     with engine.begin() as conn:
@@ -247,11 +277,10 @@ def test_enforcement_lists_active_actions_and_records_the_pull(client, engine, m
 def test_revert_twice_is_409(client, engine):
     incident_id = analysed(engine)
     rec = recs_by_action(client, incident_id)["block_ip"]
-    action = client.post(f"/recommendations/{rec['id']}/pamela").json()["action"]
-    body = {"reverted_by": "Boston"}
-    assert client.post(f"/actions/{action['id']}/revert", json=body).status_code == 200
-    assert client.post(f"/actions/{action['id']}/revert", json=body).status_code == 409
-    assert client.post(f"/actions/{uuid4()}/revert", json=body).status_code == 404
+    action = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH).json()["action"]
+    assert client.post(f"/actions/{action['id']}/revert", headers=AUTH).status_code == 200
+    assert client.post(f"/actions/{action['id']}/revert", headers=AUTH).status_code == 409
+    assert client.post(f"/actions/{uuid4()}/revert", headers=AUTH).status_code == 404
 
 
 # --- dashboard queues ----------------------------------------------------------------
@@ -276,13 +305,12 @@ def test_queues_follow_the_incident(client, engine):
 
     # PAMELA did its part; the patch is left for a person.
     rec = recs_by_action(client, incident_id)["block_ip"]
-    client.post(f"/recommendations/{rec['id']}/pamela")
+    client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert queues(client)["needs_human"] == 1
 
     patch = recs_by_action(client, incident_id)["patch_endpoint"]
     client.post(
-        f"/recommendations/{patch['id']}/decision",
-        json={"decision": "approved", "decided_by": "Boston"},
+        f"/recommendations/{patch['id']}/decision", json={"decision": "approved"}, headers=AUTH,
     )
     assert queues(client)["done"] == 1
 

@@ -172,9 +172,12 @@ def test_gate_overrides_downgrade_that_is_not_benign():
     assert g.conflict == "proposed attempted, rules allow confirmed"
 
 
-def test_gate_accepts_backed_downgrade_to_benign():
+def test_gate_rejects_llm_only_benign_downgrade():
+    # Cited findings prove events exist, not that the model read them right. A benign
+    # verdict needs deterministic facts, so the proposal is recorded as a conflict.
     g = rules_gate("rce", RCE_ATTEMPTED, "benign", investigation(ruled_benign=True), CFG)
-    assert (g.status, g.severity, g.conflict, g.allowed) == ("benign", "none", None, "attempted")
+    assert (g.status, g.severity, g.allowed) == ("attempted", "medium", "attempted")
+    assert g.conflict == "proposed benign, rules allow attempted"
 
 
 def test_gate_never_downgrades_confirmed_to_benign():
@@ -200,7 +203,8 @@ def test_gate_unknown_attack_type():
     f = Facts(sources_available=frozenset({"suricata"}))
     assert rules_gate("unknown", f, "suspected", investigation(), CFG).severity == "low"
     g = rules_gate("unknown", f, "benign", investigation(ruled_benign=True), CFG)
-    assert (g.status, g.severity) == ("benign", "none")
+    assert (g.status, g.severity) == ("suspected", "low")
+    assert g.conflict is not None
 
 
 @pytest.mark.parametrize(
@@ -486,9 +490,12 @@ def test_t3_scanner_sweep_without_classified_exploit_is_suspected():
     assert (g.status, g.severity) == ("suspected", "low")
 
 
-def test_t4_benign_request_triggering_ids():
+def test_t4_benign_request_triggering_ids_is_not_downgraded_by_the_llm():
+    # Without a trusted benign source (an authorization policy, an approved-operation
+    # list) the attempt stays attempted; the model's "this was benign" is a conflict.
     g = gate("rce", [alert(), request(0)], "benign", investigation(ruled_benign=True))
-    assert (g.status, g.severity) == ("benign", "none")
+    assert (g.status, g.severity) == ("attempted", "medium")
+    assert g.conflict == "proposed benign, rules allow attempted"
 
 
 def test_t5_brute_force_then_unauthorized_login_confirmed_high():

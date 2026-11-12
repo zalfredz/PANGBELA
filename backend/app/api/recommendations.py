@@ -9,9 +9,9 @@ from datetime import timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 from sqlalchemy import Connection, text
 
 from app import db, pamela
@@ -31,27 +31,25 @@ _INCIDENT = (
 )
 
 
-def _person(value: str) -> str:
-    value = value.strip()
-    if not value:
-        raise ValueError("must not be blank")
-    # Keeps the record honest: "PAMELA" in decided_by always means PAMELA did it.
-    if value.casefold() == pamela.NAME.casefold():
-        raise ValueError(f"{pamela.NAME} is reserved for the automatic helper")
-    return value
+def _operator(x_operator_token: Annotated[str | None, Header()] = None) -> str:
+    """Who is making the call, from the token map. Fail closed: with no tokens
+    configured the response endpoints stay off instead of accepting anyone."""
+    tokens = settings.operator_tokens
+    if not tokens:
+        raise api_error(
+            503, "operators_not_configured", "OPERATOR_TOKENS is not set on the server"
+        )
+    name = tokens.get(x_operator_token or "")
+    if name is None:
+        raise api_error(401, "invalid_operator_token", "missing or wrong X-Operator-Token")
+    return name
+
+
+Operator = Annotated[str, Depends(_operator)]
 
 
 class DecisionBody(BaseModel):
     decision: Literal["approved", "rejected"]
-    decided_by: str = Field(min_length=1, max_length=100)
-
-    _check = field_validator("decided_by")(_person)
-
-
-class RevertBody(BaseModel):
-    reverted_by: str = Field(min_length=1, max_length=100)
-
-    _check = field_validator("reverted_by")(_person)
 
 
 def _pending_or_error(conn: Connection, recommendation_id: UUID) -> dict:
@@ -116,7 +114,7 @@ def _approve(conn: Connection, rec: dict, by: str, by_pamela: bool, target: str 
 
 
 @router.post("/recommendations/{recommendation_id}/decision")
-def decide(recommendation_id: UUID, body: DecisionBody) -> dict:
+def decide(recommendation_id: UUID, body: DecisionBody, by: Operator) -> dict:
     """A person's decision. Approving also carries the action out when the system can;
     otherwise (patching, a protected IP, no single account) it is recorded for a person
     to do by hand. The response is the recommendation row plus "action" (or null)."""
@@ -129,7 +127,7 @@ def decide(recommendation_id: UUID, body: DecisionBody) -> dict:
                         "UPDATE recommendations SET status = 'rejected', decided_by = :by,"
                         f" decided_at = now() WHERE id = :id RETURNING {COLUMNS}"
                     ),
-                    {"by": body.decided_by, "id": rec["id"]},
+                    {"by": by, "id": rec["id"]},
                 )
                 .mappings()
                 .one()
@@ -137,14 +135,15 @@ def decide(recommendation_id: UUID, body: DecisionBody) -> dict:
             return jsonable_encoder({**row, "action": None})
         incident = conn.execute(text(_INCIDENT), {"id": rec["incident_id"]}).mappings().one()
         target, _ = pamela.code_target(conn, incident, rec["action"], settings)
-        out = _approve(conn, rec, body.decided_by, False, target)
+        out = _approve(conn, rec, by, False, target)
     return jsonable_encoder({**out["recommendation"], "action": out["action"]})
 
 
 @router.post("/recommendations/{recommendation_id}/pamela")
-def hand_to_pamela(recommendation_id: UUID) -> dict:
+def hand_to_pamela(recommendation_id: UUID, _by: Operator) -> dict:
     """PAMELA carries the recommendation out, if the incident's severity allows it and
-    the action has a target the code can take from the incident."""
+    the action has a target the code can take from the incident. The caller must be an
+    authenticated operator; the action itself stays PAMELA's, so decided_by is PAMELA."""
     with db.engine.begin() as conn:
         rec = _pending_or_error(conn, recommendation_id)
         incident = conn.execute(text(_INCIDENT), {"id": rec["incident_id"]}).mappings().one()
@@ -159,7 +158,7 @@ def hand_to_pamela(recommendation_id: UUID) -> dict:
 
 
 @router.post("/actions/{action_id}/revert")
-def revert(action_id: UUID, body: RevertBody) -> dict:
+def revert(action_id: UUID, by: Operator) -> dict:
     """Takes an action off the enforcement list; the lab drops it on its next pull."""
     with db.engine.begin() as conn:
         row = (
@@ -168,7 +167,7 @@ def revert(action_id: UUID, body: RevertBody) -> dict:
                     "UPDATE actions SET reverted_at = now(), reverted_by = :by"
                     f" WHERE id = :id AND reverted_at IS NULL RETURNING {ACTION_COLUMNS}"
                 ),
-                {"by": body.reverted_by, "id": action_id},
+                {"by": by, "id": action_id},
             )
             .mappings()
             .first()

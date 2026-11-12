@@ -18,7 +18,7 @@ from app.evidence.store import EvidenceEvent
 
 ORDER = ["benign", "suspected", "attempted", "confirmed"]
 
-# DRAFT (Q7). "unknown" can only end suspected (max_status) or benign (downgrade).
+# DRAFT (Q7). Severity follows the rules status only; agents cannot pick it.
 SEVERITY = {
     ("rce", "confirmed"): "critical",
     ("rce", "attempted"): "medium",
@@ -249,20 +249,17 @@ def rules_gate(
     investigation: InvestigationOutput,
     cfg: Settings,
 ) -> GateResult:
+    """The rules decide the status; the agents only propose one.
+
+    A different proposal is recorded as a conflict but never changes the verdict. In
+    particular there is no LLM-driven downgrade to benign: cited evidence ids prove an
+    event exists, not that the model's reading of it is right, so a benign verdict may
+    only come from max_status() and its deterministic facts. `investigation` stays in
+    the signature for callers, but is not evidence the gate may trust.
+    """
     allowed = max_status(attack_type, facts, cfg)
-    final, conflict = allowed, None
-    if proposed != allowed:
-        # The only accepted change: downgrade to benign, backed by cited findings,
-        # never from confirmed.
-        if (
-            proposed == "benign"
-            and allowed != "confirmed"
-            and investigation.ruled_benign
-            and investigation.findings
-        ):
-            final = "benign"
-        else:
-            conflict = f"proposed {proposed}, rules allow {allowed}"
+    final = allowed
+    conflict = f"proposed {proposed}, rules allow {allowed}" if proposed != allowed else None
     coverage = evidence_coverage(attack_type, facts)
     verification = verification_state(attack_type, facts)
     score, level = confidence(coverage, verification, conflict)

@@ -196,26 +196,24 @@ export const rerunIncident = (id: string) =>
     method: "POST",
   });
 
-export const decideRecommendation = (
-  id: string,
-  decision: "approved" | "rejected",
-  decidedBy: string,
-) =>
+const operatorHeaders = (token: string) => ({ "X-Operator-Token": token });
+
+export const decideRecommendation = (id: string, decision: "approved" | "rejected", token: string) =>
   request<Recommendation & { action: Action | null }>(
     `/recommendations/${encodeURIComponent(id)}/decision`,
-    { method: "POST", body: JSON.stringify({ decision, decided_by: decidedBy }) },
+    { method: "POST", body: JSON.stringify({ decision }), headers: operatorHeaders(token) },
   );
 
-export const handToPamela = (id: string) =>
+export const handToPamela = (id: string, token: string) =>
   request<Recommendation & { action: Action | null }>(
     `/recommendations/${encodeURIComponent(id)}/pamela`,
-    { method: "POST" },
+    { method: "POST", headers: operatorHeaders(token) },
   );
 
-export const revertAction = (id: string, by: string) =>
+export const revertAction = (id: string, token: string) =>
   request<Action>(`/actions/${encodeURIComponent(id)}/revert`, {
     method: "POST",
-    body: JSON.stringify({ reverted_by: by }),
+    headers: operatorHeaders(token),
   });
 
 export const getTestResults = () => request<TestResult[]>("/tests/results");

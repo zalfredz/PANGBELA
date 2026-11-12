@@ -9,6 +9,14 @@ from sqlalchemy import create_engine, text
 from app import db
 from app.config import settings
 from scripts.migrate import migrate
+from tests.support import OPERATOR_NAME, OPERATOR_TOKEN
+
+
+@pytest.fixture(autouse=True)
+def _operator_tokens(monkeypatch):
+    """Every test runs with one operator configured; tests for the unconfigured case
+    override it. Response endpoints fail closed without this."""
+    monkeypatch.setattr(settings, "OPERATOR_TOKENS", f"{OPERATOR_NAME}:{OPERATOR_TOKEN}")
 
 
 @pytest.fixture(scope="session")

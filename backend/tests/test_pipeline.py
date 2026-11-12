@@ -167,17 +167,18 @@ def test_attacker_content_only_inside_untrusted_block(engine, incident):
             assert user.index(PAYLOAD) < user.rindex("</untrusted_data>")
 
 
-def test_ruled_benign_skips_forensics(engine, incident):
+def test_ruled_benign_skips_forensics_but_does_not_change_the_verdict(engine, incident):
     run(
         incident,
         [detection_reply, investigation_reply(ruled_benign=True), decision_reply("benign")],
     )
     inc = row(engine, "SELECT status, severity FROM incidents WHERE id = :id", id=incident)
-    assert (inc["status"], inc["severity"]) == ("benign", "none")
+    # The investigation's benign proposal is not evidence; only the rules may say benign.
+    assert (inc["status"], inc["severity"]) == ("attempted", "medium")
     agents = [r["agent"] for r in rows(engine, "SELECT agent FROM agent_runs ORDER BY started_at")]
     assert "forensics" not in agents
     rules = row(engine, "SELECT rules_conflict FROM agent_runs WHERE agent = 'rules'")
-    assert rules["rules_conflict"] is None
+    assert rules["rules_conflict"] == "proposed benign, rules allow attempted"
 
 
 def investigation_rounds(engine) -> list[int]:

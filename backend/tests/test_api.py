@@ -15,6 +15,7 @@ from app.ingest.eve_parser import parse_alert
 from app.ingest.grouping import group_alert
 from app.main import app
 from tests.fixtures.eve_alerts import alert
+from tests.support import AUTH, OPERATOR_NAME
 from tests.test_pipeline import (
     decision_reply,
     detection_reply,
@@ -153,37 +154,49 @@ def first_recommendation(client, engine) -> str:
 def test_decision_records_and_returns_row(client, engine):
     rec = first_recommendation(client, engine)
     r = client.post(
-        f"/recommendations/{rec}/decision", json={"decision": "approved", "decided_by": "Glenn"}
+        f"/recommendations/{rec}/decision", json={"decision": "approved"}, headers=AUTH
     )
     assert r.status_code == 200
     body = r.json()
-    assert (body["status"], body["decided_by"]) == ("approved", "Glenn")
+    assert (body["status"], body["decided_by"]) == ("approved", OPERATOR_NAME)
     assert body["decided_at"] is not None
 
 
 def test_second_decision_is_409(client, engine):
     rec = first_recommendation(client, engine)
-    body = {"decision": "rejected", "decided_by": "Boston"}
-    client.post(f"/recommendations/{rec}/decision", json=body)
-    r = client.post(f"/recommendations/{rec}/decision", json=body)
+    body = {"decision": "rejected"}
+    client.post(f"/recommendations/{rec}/decision", json=body, headers=AUTH)
+    r = client.post(f"/recommendations/{rec}/decision", json=body, headers=AUTH)
     assert r.status_code == 409
     assert r.json()["error"] == "already_decided"
 
 
-@pytest.mark.parametrize(
-    "body",
-    [{"decision": "maybe", "decided_by": "Glenn"}, {"decision": "approved", "decided_by": ""}],
-)
+@pytest.mark.parametrize("body", [{"decision": "maybe"}, {}])
 def test_decision_validation(client, engine, body):
     rec = first_recommendation(client, engine)
-    assert client.post(f"/recommendations/{rec}/decision", json=body).status_code == 422
+    assert (
+        client.post(f"/recommendations/{rec}/decision", json=body, headers=AUTH).status_code == 422
+    )
 
 
 def test_decision_unknown_is_404(client):
     r = client.post(
-        f"/recommendations/{uuid4()}/decision", json={"decision": "approved", "decided_by": "G"}
+        f"/recommendations/{uuid4()}/decision", json={"decision": "approved"}, headers=AUTH
     )
     assert r.status_code == 404
+
+
+def test_operator_tokens_must_be_name_token_pairs():
+    from app.config import Settings
+
+    for value in (
+        "alice",
+        "alice:short",
+        "PAMELA:" + "x" * 40,
+        "a:" + "x" * 40 + ",a:" + "y" * 40,
+    ):
+        with pytest.raises(ValueError):
+            Settings(OPERATOR_TOKENS=value)
 
 
 # --- test results --------------------------------------------------------------------
