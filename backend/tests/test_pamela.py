@@ -79,15 +79,27 @@ def test_pamela_blocks_the_incident_source_not_the_agent_target(client, engine):
     assert body["action"]["expires_at"] is not None
 
 
-def test_pamela_refuses_high_severity(client, engine):
+@pytest.mark.parametrize("severity", ["high", "critical"])
+def test_pamela_refuses_high_and_critical_severity(client, engine, severity):
     incident_id = analysed(engine)
-    set_incident(engine, incident_id, severity="high")
+    set_incident(engine, incident_id, severity=severity)
     rec = recs_by_action(client, incident_id)["block_ip"]
     r = client.post(f"/recommendations/{rec['id']}/pamela", headers=AUTH)
     assert r.status_code == 403 and r.json()["error"] == "needs_human"
     assert recs_by_action(client, incident_id)["block_ip"]["status"] == "pending"
     detail = client.get(f"/incidents/{incident_id}").json()
     assert detail["pamela"]["blocked_reason"] == "needs_human"
+
+
+def test_critical_rce_patch_cannot_be_auto_applied(client, engine):
+    # Patch execution does not exist: even at low/medium it stays a manual task, and at
+    # critical PAMELA is refused before the action type is even considered.
+    incident_id = analysed(engine)
+    set_incident(engine, incident_id, severity="critical")
+    patch = recs_by_action(client, incident_id)["patch_endpoint"]
+    r = client.post(f"/recommendations/{patch['id']}/pamela", headers=AUTH)
+    assert (r.status_code, r.json()["error"]) == (403, "needs_human")
+    assert recs_by_action(client, incident_id)["patch_endpoint"]["status"] == "pending"
 
 
 def test_pamela_refuses_while_agents_run(client, engine):

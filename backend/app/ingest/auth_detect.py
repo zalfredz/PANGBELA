@@ -30,13 +30,14 @@ def parse_lines(lines: list[str]) -> tuple[list[Record], int]:
     return records, ignored
 
 
-def _store(conn: Connection, r: Record) -> bool:
+def _store(conn: Connection, r: Record, producer: str) -> bool:
     """Insert one event; False if the same line was already stored."""
     return (
         conn.execute(
             text(
-                "INSERT INTO auth_events (event_time, src_ip, result, raw, fields)"
-                " VALUES (:ts, CAST(:src AS inet), :result, :raw, CAST(:fields AS jsonb))"
+                "INSERT INTO auth_events (event_time, src_ip, result, raw, fields, producer)"
+                " VALUES (:ts, CAST(:src AS inet), :result, :raw, CAST(:fields AS jsonb),"
+                " :producer)"
                 " ON CONFLICT (event_time, md5(raw)) DO NOTHING RETURNING id"
             ),
             {
@@ -45,6 +46,7 @@ def _store(conn: Connection, r: Record) -> bool:
                 "result": r.fields["result"],
                 "raw": r.raw,
                 "fields": json.dumps(r.fields),
+                "producer": producer,
             },
         ).scalar()
         is not None
@@ -114,11 +116,11 @@ def _attach(conn: Connection, incident_id: UUID) -> list[tuple[EvidenceEvent, da
 
 
 def ingest_auth(
-    conn: Connection, records: list[Record], cfg: Settings
+    conn: Connection, records: list[Record], cfg: Settings, producer: str = "unknown"
 ) -> tuple[list[UUID], list[tuple[EvidenceEvent, datetime]]]:
     """Store the records and open or extend incidents. Returns the incidents touched
     and the newly stored evidence, for evidence_added."""
-    stored = [r for r in sorted(records, key=lambda r: r.ts) if _store(conn, r)]
+    stored = [r for r in sorted(records, key=lambda r: r.ts) if _store(conn, r, producer)]
     incident_ids: list[UUID] = []
     added: list[tuple[EvidenceEvent, datetime]] = []
     for src_ip in dict.fromkeys(r.src_ip for r in stored):

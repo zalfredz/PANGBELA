@@ -48,6 +48,7 @@ def test_access_line_splits_query_and_keeps_raw():
         "status": 200,
         "user_agent": "curl/8.7.1",
         "service": "web-lab",
+        "policy": None,
     }
 
 

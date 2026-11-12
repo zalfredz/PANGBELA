@@ -41,6 +41,19 @@ def _check_token(token: str | None) -> None:
         raise api_error(401, "bad_ingest_token", "X-Ingest-Token is missing or wrong")
 
 
+def _check_auth_token(token: str | None) -> None:
+    """Auth events are a separate trust domain: their producer can state whether a
+    login was authorized, so it must not share the network-alert credential."""
+    if not settings.AUTH_INGEST_TOKEN:
+        raise api_error(
+            503, "auth_ingest_not_configured", "AUTH_INGEST_TOKEN is not set on the server"
+        )
+    if token is None or not secrets.compare_digest(
+        token.encode(), settings.AUTH_INGEST_TOKEN.encode()
+    ):
+        raise api_error(401, "bad_auth_ingest_token", "X-Auth-Ingest-Token is missing or wrong")
+
+
 def _emit_added(added: list) -> None:
     # Called after commit, so a stream never shows evidence a rollback discarded.
     for ev, created_at in added:
@@ -87,16 +100,18 @@ def ingest_suricata(
 @router.post("/ingest/auth", status_code=202, response_model=IngestResult)
 def ingest_auth_log(
     body: AuthIngestBody,
-    x_ingest_token: Annotated[str | None, Header()] = None,
+    x_auth_ingest_token: Annotated[str | None, Header()] = None,
 ) -> IngestResult:
     """Login events as auth log lines (docs/log-schema.md). Opens a brute_force
     incident once a source IP crosses the failure threshold."""
-    _check_token(x_ingest_token)
+    _check_auth_token(x_auth_ingest_token)
     records, ignored = parse_lines(body.lines)
     if ignored:
         log.warning("ignored %d invalid auth log lines", ignored)
     with db.engine.begin() as conn:
-        incident_ids, added = ingest_auth(conn, records, settings)
+        incident_ids, added = ingest_auth(
+            conn, records, settings, producer=settings.AUTH_INGEST_PRODUCER
+        )
     _emit_added(added)
     return IngestResult(
         accepted=len(records), ignored=ignored, incident_ids=[str(i) for i in incident_ids]

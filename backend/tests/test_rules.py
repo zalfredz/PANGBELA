@@ -66,8 +66,18 @@ def alert(url="/ping?host=1;id") -> EvidenceEvent:
     return ev("suricata", 0, http_url=url)
 
 
-def request(seconds=0.0, path="/ping", ip=ATTACKER, request_id="req-1") -> EvidenceEvent:
-    return ev("access_log", seconds, ip=ip, path=path, query="host=1;id", request_id=request_id)
+def request(
+    seconds=0.0, path="/ping", ip=ATTACKER, request_id="req-1", policy=None
+) -> EvidenceEvent:
+    return ev(
+        "access_log",
+        seconds,
+        ip=ip,
+        path=path,
+        query="host=1;id",
+        request_id=request_id,
+        policy=policy,
+    )
 
 
 def proc(
@@ -393,6 +403,14 @@ def test_unlinked_process_in_two_requests_windows_is_ambiguous():
     assert (f.exec_unlinked, f.ambiguous) == (True, True)
 
 
+def test_unauthorized_flag_without_linkage_never_confirms():
+    # A process row that says authorized=false but cannot be tied to the request (wrong
+    # parent) must not confirm anything: the flag alone is not evidence of the outcome.
+    f = facts([alert(), request(0), proc(1, parent="/usr/sbin/cron", authorized=False)])
+    assert (f.exec_linked, f.exec_unauthorized) == (False, False)
+    assert max_status("rce", f, CFG) == "attempted"
+
+
 def test_link_requires_web_server_parent():
     f = facts([alert(), request(0), proc(1, parent="/usr/sbin/cron")])
     assert (f.exec_linked, f.exec_unlinked) == (False, False)
@@ -520,6 +538,34 @@ def test_t3_scanner_sweep_without_classified_exploit_is_suspected():
     # unknown, and unknown can't go above suspected whatever the agents say.
     g = gate("unknown", [alert("/admin"), request(0, path="/admin")], "attempted")
     assert (g.status, g.severity) == ("suspected", "low")
+
+
+def test_t4_approved_signed_operation_with_allowed_child_is_benign():
+    # Real alert, real linked execution, app-verified signed approval: deterministic
+    # false positive, no LLM involved.
+    g = gate(
+        "rce",
+        [alert(), request(0, policy="approved"), proc(1, authorized=True)],
+        "attempted",
+    )
+    assert (g.status, g.severity, g.verification) == ("benign", "none", VERIFIED)
+    assert g.conflict == "proposed attempted, rules allow benign"
+
+
+def test_t4_approval_claim_without_a_linked_allowed_execution_is_not_benign():
+    # The policy field alone (e.g. forged by a client) cannot make an alert benign.
+    g = gate("rce", [alert(), request(0, policy="approved")], "confirmed")
+    assert (g.status, g.severity) == ("attempted", "medium")
+
+
+def test_t4_approved_operation_whose_child_is_not_allowed_is_confirmed():
+    # Contradictory evidence resolves against the incident, not for it.
+    g = gate(
+        "rce",
+        [alert(), request(0, policy="approved"), proc(1, authorized=False)],
+        "confirmed",
+    )
+    assert (g.status, g.severity) == ("confirmed", "critical")
 
 
 def test_t4_benign_request_triggering_ids_is_not_downgraded_by_the_llm():

@@ -47,6 +47,7 @@ def auth_lines(ip: str | None = None) -> list[str]:
 @pytest.fixture
 def client(engine, monkeypatch):
     monkeypatch.setattr(settings, "INGEST_TOKEN", TOKEN)
+    monkeypatch.setattr(settings, "AUTH_INGEST_TOKEN", TOKEN)
     monkeypatch.setattr(settings, "BRUTE_FORCE_MIN_FAILURES", 10)
     monkeypatch.setattr(settings, "BRUTE_FORCE_WINDOW_SECONDS", 120)
     monkeypatch.setattr(settings, "INCIDENT_GROUP_WINDOW_SECONDS", 600)
@@ -54,7 +55,9 @@ def client(engine, monkeypatch):
 
 
 def post_auth(client, lines, token=TOKEN):
-    return client.post("/ingest/auth", json={"lines": lines}, headers={"X-Ingest-Token": token})
+    return client.post(
+        "/ingest/auth", json={"lines": lines}, headers={"X-Auth-Ingest-Token": token}
+    )
 
 
 def scalar(engine, sql, **params):

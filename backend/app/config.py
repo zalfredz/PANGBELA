@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     LLM_SCHEMA_RETRIES: int = 1
 
     INGEST_TOKEN: str = ""
+    # Separate credential for the authentication producer. A Suricata shipper must not be
+    # able to write login events (and with them the authorized flag); keep the two apart.
+    AUTH_INGEST_TOKEN: str = ""
+    # Recorded on every auth_events row, so the dashboard and tests can tell which
+    # producer wrote the event.
+    AUTH_INGEST_PRODUCER: str = "auth"
     CORS_ORIGINS: str = "http://localhost:3000"
 
     ACCESS_LOG_PATH: str = "/lab-logs/access.log"

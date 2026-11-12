@@ -145,3 +145,31 @@ def test_error_unrelated_to_mode_is_not_swallowed():
     c, _ = client([bad_request("model not found")] * 3)
     with pytest.raises(Exception, match="model not found"):
         ask(c)
+
+
+# --- provider faults ------------------------------------------------------------------
+
+
+class Boom:
+    """Minimal SDK stub whose create() raises, for timeout/quota behaviour."""
+
+    def __init__(self, exc: Exception):
+        self.calls = 0
+        self.exc = exc
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls += 1
+        raise self.exc
+
+
+@pytest.mark.parametrize("exc", [TimeoutError("timeout"), RuntimeError("rate limit exceeded")])
+def test_provider_faults_are_not_retried_forever(exc):
+    sdk = Boom(exc)
+    cfg = Settings(LLM_MODEL="fake-model", LLM_SCHEMA_RETRIES=5)
+    c = LLMClient(cfg, sdk=sdk)
+    with pytest.raises(type(exc)):
+        ask(c)
+    # Schema retries are for invalid output, not for a provider that is down or refusing.
+    assert sdk.calls == 1

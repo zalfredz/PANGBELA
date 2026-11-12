@@ -69,6 +69,9 @@ class Facts:
     exec_unauthorized: bool = False
     exec_authorized: bool = False
     exec_unverified: bool = False
+    # A matching request the app marked as a pre-approved operation after verifying a
+    # signed approval. Only then may an IDS hit be called benign.
+    approved_operation: bool = False
     failures: int = 0
     success_after: bool = False
     # Among the successes after the first failure: one the lab marked authorized=false,
@@ -148,6 +151,7 @@ def compute_facts(
         for e in by_source.get("access_log", [])
         if e.src_ip == src_ip and e.fields.get("path") in alert_paths
     ]
+    approved_operation = any(e.fields.get("policy") == "approved" for e in requests)
     before = timedelta(seconds=cfg.CORRELATION_WINDOW_BEFORE_SECONDS)
     after = timedelta(seconds=cfg.CORRELATION_WINDOW_SECONDS)
     exec_linked = exec_unlinked = ambiguous = False
@@ -195,6 +199,7 @@ def compute_facts(
         exec_unauthorized=exec_unauthorized,
         exec_authorized=exec_authorized,
         exec_unverified=exec_unverified,
+        approved_operation=approved_operation,
         failures=failures,
         success_after=bool(successes),
         unauthorized_success=any(e.fields.get("authorized") is False for e in successes),
@@ -209,6 +214,9 @@ def max_status(attack_type: str, f: Facts, cfg: Settings) -> str:
         # execution policy can say the execution was not allowed.
         if f.exec_unauthorized:
             return "confirmed"
+        if f.exec_linked and f.exec_authorized and f.approved_operation:
+            # A real alert, a real execution, and a verified approved operation.
+            return "benign"
         if f.exec_linked or f.payload_logged:
             return "attempted"
         return "suspected"

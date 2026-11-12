@@ -35,6 +35,8 @@ def parse(line: str) -> jsonl.Record:
             "status": status,
             "user_agent": jsonl.text(obj, "user_agent"),
             "service": jsonl.text(obj, "service"),
+            # Only the app's own policy writes this, after verifying a signed approval.
+            "policy": jsonl.text(obj, "policy"),
         },
         raw=line,
     )
