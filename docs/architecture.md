@@ -69,6 +69,16 @@ Docker Compose: `postgres + backend + shipper`; `lab/docker-compose.yml` attache
 same named volumes and network. Configuration is environment-based; migrations run
 before the backend starts. No cloud dependency, no inbound public surface.
 
+## Pilot path (shadow mode, not built)
+
+The honest next step is a shadow-mode pilot on one internal web service: read-only
+telemetry with written permission, no blocking, no patching, no host access. The service
+would run PANGBELA alongside the existing SOC process, compare deterministic verdicts
+with analyst decisions, and report disagreements. Exit criteria: agreed false-positive
+budget, evidence retention rules, and an operator runbook. This is a **proposal**, not a
+capability that exists in this repository; nothing here has been deployed to a real
+network.
+
 ## Deliberate limits
 
 - Process telemetry is application-instrumented (documented Falco fallback), not EDR.

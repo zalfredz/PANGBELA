@@ -10,6 +10,7 @@ import {
   type Queue,
 } from "@/lib/api";
 import { listTitle, QUEUE_TEXT, TYPE_TEXT } from "@/lib/plain";
+import { AiAvailability } from "@/components/ai-status";
 import {
   Button,
   EmptyState,
@@ -88,12 +89,14 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold">Dasbor</h1>
           <p className="mt-1 max-w-prose text-muted">
-            Setiap serangan ke lab diperiksa agen, lalu aturan tetap menentukan hasilnya. Mulai dari
-            yang butuh keputusan Anda.
+            Aturan deterministik menentukan hasil; agen AI, bila aktif, menyusun penjelasan.
+            Mulai dari yang butuh keputusan Anda.
           </p>
         </div>
         <Button onClick={reload}>Muat ulang</Button>
       </div>
+
+      <AiAvailability />
 
       {load.kind === "ready" && (
         <div role="group" aria-label="Saring menurut keadaan" className="grid grid-cols-2 gap-3 lg:grid-cols-4">

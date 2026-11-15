@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { AiAvailability } from "@/components/ai-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Action,
@@ -128,6 +129,7 @@ export default function IncidentView() {
   const d = load.detail;
   return (
     <div className="space-y-10">
+      <AiAvailability />
       <div className="space-y-4">
         <BackLink />
         <Summary detail={d} techOpen={techOpen} onToggleTech={() => setTechOpen((o) => !o)} />

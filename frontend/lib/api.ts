@@ -194,6 +194,9 @@ export interface IncidentFilters {
 
 export const getOverview = () => request<Overview>("/incidents/overview");
 
+export const getHealth = () =>
+  request<{ db: string; llm_configured: boolean }>("/health");
+
 export function listIncidents(filters: IncidentFilters, before?: string | null) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(filters)) if (v) q.set(k, v);
